@@ -505,9 +505,7 @@ function SortableSectionBlock({
 
       {isCollapsed ? (
         <SectionPoseDropArea sectionId={section.id} isEmpty={section.poses.length === 0}>
-          {section.poses.length > 0 ? (
-            <p className="py-1 text-center text-xs text-stone-400">Drop poses here to add at end</p>
-          ) : null}
+          {null}
         </SectionPoseDropArea>
       ) : (
         <>
@@ -528,24 +526,51 @@ function SortableSectionBlock({
             )}
           </SectionPoseDropArea>
 
-          <div className="mt-3 space-y-3 border-t border-stone-200/80 pt-3">
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-stone-200/80 pt-3">
             <button
               type="button"
               onClick={() => onAddPose(section.id)}
-              className="text-sm text-stone-600 underline-offset-2 hover:text-stone-800 hover:underline"
+              className="flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm text-stone-400 transition-colors hover:bg-stone-100/70 hover:text-stone-700"
             >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="h-4 w-4 shrink-0"
+              >
+                <circle cx="10" cy="10" r="7.5" />
+                <path strokeLinecap="round" d="M10 7v6M7 10h6" />
+              </svg>
               Add pose
             </button>
             {section.poses.length > 0 && (
-              <label className="flex w-fit items-center gap-2 text-xs text-stone-600">
-                <input
-                  type="checkbox"
-                  checked={section.secondSide}
-                  onChange={() => onToggleSecondSide(section.id)}
-                  className="h-3.5 w-3.5 rounded border-stone-300 text-stone-700 focus:ring-stone-300"
-                />
+              <button
+                type="button"
+                onClick={() => onToggleSecondSide(section.id)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  section.secondSide
+                    ? "bg-stone-800 text-white"
+                    : "border border-stone-200 bg-white text-stone-400 hover:border-stone-300 hover:text-stone-600"
+                }`}
+              >
+                {section.secondSide && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="h-3 w-3 shrink-0"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                )}
                 Repeat on other side
-              </label>
+              </button>
             )}
           </div>
         </>
@@ -862,9 +887,6 @@ export default function Home() {
           <h1 className="mt-3 text-4xl font-light tracking-tight text-stone-900">
             Sequence Builder
           </h1>
-          <p className="mt-3 text-sm text-stone-600">
-            Drag poses between sections, or drop on the trash to remove.
-          </p>
         </header>
 
         <DndContext
@@ -929,9 +951,6 @@ export default function Home() {
 
         <footer className="mt-8 rounded-2xl bg-white/80 px-5 py-4 text-sm text-stone-600 ring-1 ring-stone-200/70">
           <p className="font-medium text-stone-800">Estimated class time: {formattedDuration}</p>
-          <p className="mt-1">
-            Sections marked repeat on other side count that block twice in the total.
-          </p>
         </footer>
       </main>
     </div>
