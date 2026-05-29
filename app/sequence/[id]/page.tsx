@@ -34,6 +34,11 @@ import {
   getBodyRegionClasses,
   getBodyTargetLabel,
 } from "@/lib/poses";
+import {
+  computePeakReadiness,
+  insertPoseBeforePeak,
+  type PeakReadiness,
+} from "@/lib/peak-readiness";
 
 // ─── Pose library ───────────────────────────────────────────────────────────
 
@@ -224,6 +229,98 @@ function EnergyArc({ sections }: { sections: Section[] }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Peak readiness panel ─────────────────────────────────────────────────────
+
+function PeakReadinessPanel({
+  readiness,
+  onAddPrep,
+}: {
+  readiness: PeakReadiness;
+  onAddPrep: (poseName: string) => void;
+}) {
+  const { peak, depends, warmed, unwarmed, suggestionsByArea } = readiness;
+  const allWarmed = unwarmed.length === 0;
+
+  return (
+    <div className="mb-5 rounded-2xl border border-stone-200 bg-white/80 p-4 ring-1 ring-stone-200/60">
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-stone-400">
+          Peak readiness
+        </p>
+        <p className="text-xs font-medium text-stone-500">
+          {warmed.length} / {depends.length} warmed
+        </p>
+      </div>
+
+      {/* Area chips */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {depends.map((area) => {
+          const isWarmed = warmed.includes(area);
+          return (
+            <span
+              key={area}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                isWarmed
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              <span aria-hidden className="text-[10px] leading-none">
+                {isWarmed ? "✓" : "!"}
+              </span>
+              {getBodyTargetLabel(area)}
+            </span>
+          );
+        })}
+      </div>
+
+      {/* Verdict */}
+      {allWarmed ? (
+        <p className="text-sm text-emerald-700">
+          <span aria-hidden>✓ </span>Your class warms up for {peak}.
+        </p>
+      ) : (
+        <p className="text-sm text-stone-600">
+          Warm these before {peak}:{" "}
+          <span className="font-medium text-amber-700">
+            {unwarmed.map((a) => getBodyTargetLabel(a)).join(", ")}
+          </span>
+        </p>
+      )}
+
+      {/* Suggestions per unwarmed area */}
+      {!allWarmed && (
+        <div className="mt-3 space-y-2.5 border-t border-stone-200/80 pt-3">
+          {suggestionsByArea.map(({ area, poses }) => (
+            <div key={area}>
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-stone-400">
+                Warm {getBodyTargetLabel(area)}
+              </p>
+              {poses.length === 0 ? (
+                <p className="text-xs italic text-stone-400">No prep pose in the library</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {poses.map((pose) => (
+                    <button
+                      key={pose}
+                      type="button"
+                      onClick={() => onAddPrep(pose)}
+                      className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[11px] text-stone-600 transition hover:border-stone-300 hover:bg-[#e8e3da]/70 hover:text-stone-800"
+                    >
+                      <span aria-hidden className="text-stone-400">+</span>
+                      {pose}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1275,6 +1372,16 @@ export default function BuilderPage() {
     return map;
   }, [sections]);
 
+  // Peak readiness: does the arc warm up what the peak depends on?
+  const peakReadiness = useMemo(
+    () => (peakPose ? computePeakReadiness(sections, peakPose) : null),
+    [sections, peakPose],
+  );
+
+  const handleAddPrep = (poseName: string) => {
+    updateSections((prev) => insertPoseBeforePeak(prev, poseName, peakPose));
+  };
+
   const sectionIds = sections.map((s) => s.id);
   const addPoseTargetSection = sections.find((s) => s.id === addPoseSectionId);
 
@@ -1376,6 +1483,10 @@ export default function BuilderPage() {
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
           >
+            {peakReadiness && (
+              <PeakReadinessPanel readiness={peakReadiness} onAddPrep={handleAddPrep} />
+            )}
+
             <EnergyArc sections={sections} />
 
             <SortableContext items={sectionIds} strategy={verticalListSortingStrategy}>
