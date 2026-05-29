@@ -44,7 +44,9 @@ function migrate(raw: any): SequenceRecord {
   const merged = new Set<string>();
   if (Array.isArray(raw.taughtDates)) raw.taughtDates.forEach((d: string) => merged.add(d));
   if (typeof raw.intendedDate === "string" && raw.intendedDate) merged.add(raw.intendedDate);
-  const { taughtDates: _t, intendedDate: _i, ...rest } = raw;
+  const rest = { ...raw };
+  delete rest.taughtDates;
+  delete rest.intendedDate;
   return { ...rest, dates: [...merged].sort() } as SequenceRecord;
 }
 

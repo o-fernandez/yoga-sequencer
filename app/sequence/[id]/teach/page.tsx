@@ -161,6 +161,8 @@ export default function TeachPage() {
   useWakeLock();
 
   useEffect(() => {
+    // Hydrates client-only sequence state from browser storage.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSequence(loadSequence(id));
     setLoaded(true);
   }, [id]);

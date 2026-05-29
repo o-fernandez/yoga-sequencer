@@ -267,6 +267,8 @@ export function BulkPoseEntry({
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    // Detects a browser-only capability that isn't known until after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSpeechSupported(!!SpeechRecognition);
   }, []);
 
@@ -274,6 +276,7 @@ export function BulkPoseEntry({
   useEffect(() => {
     const tokens = parseQuickEntry(input);
     if (tokens.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRows([]);
       return;
     }

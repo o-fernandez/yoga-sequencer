@@ -30,6 +30,8 @@ import {
 } from "@/lib/sequences";
 import {
   poseLibrary,
+  allPoses,
+  ALL_GROUPS,
   getPoseMeta,
   getBodyRegionClasses,
   getBodyTargetLabel,
@@ -42,16 +44,19 @@ import {
   insertPoseBeforePeak,
   type PeakReadiness,
 } from "@/lib/peak-readiness";
+import {
+  auditSequence,
+  findLastPoseIndex,
+  hasPose,
+  posesAfter,
+  type AuditAction,
+  type AuditSeverity,
+  type SequenceAuditReport,
+} from "@/lib/sequence-audit";
 
 // ─── Pose library ───────────────────────────────────────────────────────────
 
 type PoseOption = { pose: string; duration: string; minutes: number };
-type PoseCategory = { name: string; poses: PoseOption[] };
-
-const poseCategories: PoseCategory[] = poseLibrary.map((cat) => ({
-  name: cat.category,
-  poses: cat.poses.map((p) => ({ pose: p.pose, duration: p.duration, minutes: p.minutes })),
-}));
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -325,6 +330,111 @@ function PeakReadinessPanel({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Sequence audit panel ────────────────────────────────────────────────────
+
+const AUDIT_SEVERITY_STYLES: Record<AuditSeverity, {
+  dot: string;
+  label: string;
+  panel: string;
+  text: string;
+}> = {
+  critical: {
+    dot: "bg-red-500",
+    label: "Fix",
+    panel: "border-red-200 bg-red-50/70",
+    text: "text-red-700",
+  },
+  warning: {
+    dot: "bg-amber-500",
+    label: "Tighten",
+    panel: "border-amber-200 bg-amber-50/70",
+    text: "text-amber-700",
+  },
+  note: {
+    dot: "bg-sky-500",
+    label: "Note",
+    panel: "border-sky-200 bg-sky-50/70",
+    text: "text-sky-700",
+  },
+  good: {
+    dot: "bg-emerald-500",
+    label: "Good",
+    panel: "border-emerald-200 bg-emerald-50/70",
+    text: "text-emerald-700",
+  },
+};
+
+function SequenceAuditPanel({
+  report,
+  onAction,
+}: {
+  report: SequenceAuditReport;
+  onAction: (action: AuditAction) => void;
+}) {
+  return (
+    <section className="mb-5 rounded-2xl border border-stone-200 bg-white/80 p-4 ring-1 ring-stone-200/60">
+      <div className="mb-3 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-stone-400">
+            Sequence audit
+          </p>
+          <p className="mt-1 text-sm font-medium text-stone-800">{report.summary}</p>
+        </div>
+        <div className="rounded-full bg-stone-900 px-3 py-1 text-xs font-medium tabular-nums text-white">
+          {report.score}
+        </div>
+      </div>
+
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        {[
+          ["Total", report.totalMinutes],
+          ["Standing", report.standingMinutes],
+          ["Wind-down", report.windDownMinutes],
+        ].map(([label, minutes]) => (
+          <div key={label} className="rounded-xl bg-stone-100/80 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-stone-400">{label}</p>
+            <p className="mt-0.5 text-sm font-medium text-stone-700">{formatMinutes(minutes as number)}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        {report.issues.map((issue) => {
+          const styles = AUDIT_SEVERITY_STYLES[issue.severity];
+          return (
+            <article
+              key={issue.id}
+              className={`rounded-xl border px-3.5 py-3 ${styles.panel}`}
+            >
+              <div className="flex items-start gap-3">
+                <span aria-hidden className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${styles.dot}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <p className="text-sm font-medium text-stone-800">{issue.title}</p>
+                    <span className={`text-[10px] font-medium uppercase tracking-[0.12em] ${styles.text}`}>
+                      {styles.label} · {issue.category}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-stone-600">{issue.detail}</p>
+                </div>
+                {issue.action && (
+                  <button
+                    type="button"
+                    onClick={() => onAction(issue.action!)}
+                    className="shrink-0 rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-700 shadow-sm transition hover:border-stone-300 hover:bg-stone-50"
+                  >
+                    {issue.action.label}
+                  </button>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -736,41 +846,43 @@ function AddPoseModal({
   const [search, setSearch] = useState("");
   const [activeBodyTargets, setActiveBodyTargets] = useState<Set<string>>(new Set());
   const [activeEnergies, setActiveEnergies] = useState<Set<string>>(new Set());
+  const [activeGroups, setActiveGroups] = useState<Set<string>>(new Set());
 
-  const toggleBodyTarget = (t: string) =>
-    setActiveBodyTargets((prev) => { const next = new Set(prev); next.has(t) ? next.delete(t) : next.add(t); return next; });
-  const toggleEnergy = (e: string) =>
-    setActiveEnergies((prev) => { const next = new Set(prev); next.has(e) ? next.delete(e) : next.add(e); return next; });
+  const toggleIn = (setter: typeof setActiveBodyTargets) => (value: string) =>
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  const toggleBodyTarget = toggleIn(setActiveBodyTargets);
+  const toggleEnergy = toggleIn(setActiveEnergies);
+  const toggleGroup = toggleIn(setActiveGroups);
 
   const query = search.trim().toLowerCase();
-  // Fuzzy name match (tolerant of typos/abbreviations); body-part text search stays exact.
-  const fuzzyMatchNames = search.trim()
-    ? new Set(searchPoses(search.trim()).map((p) => p.pose))
-    : null;
 
-  const visibleCategories = poseLibrary
-    .map((cat) => ({
-      name: cat.category,
-      poses: cat.poses.filter((p) => {
-        const meta = getPoseMeta(p.pose)!;
-        // Search: fuzzy match on name, or substring match on any body target label
-        if (query) {
-          const nameMatch = fuzzyMatchNames!.has(p.pose);
-          const targetMatch = meta.bodyTargets.some((t) =>
-            getBodyTargetLabel(t).toLowerCase().includes(query)
-          );
-          if (!nameMatch && !targetMatch) return false;
-        }
-        // Energy filter
-        if (activeEnergies.size > 0 && !activeEnergies.has(meta.energy)) return false;
-        // Body target filter (any match)
-        if (activeBodyTargets.size > 0 && !meta.bodyTargets.some((t) => activeBodyTargets.has(t))) return false;
-        return true;
-      }),
-    }))
-    .filter((cat) => cat.poses.length > 0);
+  // Relevance-ranked when searching (exact > prefix > substring > fuzzy), library
+  // order otherwise. Body-part text matches are appended after the name matches.
+  const base: PoseMeta[] = (() => {
+    if (!query) return allPoses;
+    const ranked = searchPoses(search.trim());
+    const inRanked = new Set(ranked.map((p) => p.pose));
+    const byBodyPart = allPoses.filter(
+      (p) =>
+        !inRanked.has(p.pose) &&
+        p.bodyTargets.some((t) => getBodyTargetLabel(t).toLowerCase().includes(query))
+    );
+    return [...ranked, ...byBodyPart];
+  })();
 
-  const hasActiveFilters = activeBodyTargets.size > 0 || activeEnergies.size > 0;
+  const visiblePoses = base.filter((meta) => {
+    if (activeEnergies.size > 0 && !activeEnergies.has(meta.energy)) return false;
+    if (activeBodyTargets.size > 0 && !meta.bodyTargets.some((t) => activeBodyTargets.has(t))) return false;
+    if (activeGroups.size > 0 && !(meta.groups ?? []).some((g) => activeGroups.has(g))) return false;
+    return true;
+  });
+
+  const hasActiveFilters = activeBodyTargets.size > 0 || activeEnergies.size > 0 || activeGroups.size > 0;
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-stone-900/20 p-6">
@@ -879,12 +991,36 @@ function AddPoseModal({
           </div>
         </div>
 
+        {/* Group / family filter — horizontal scroll */}
+        <div className="px-5 pb-3">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-stone-400">Group</p>
+          <div className="flex gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+            {ALL_GROUPS.map((g) => {
+              const active = activeGroups.has(g);
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => toggleGroup(g)}
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
+                    active
+                      ? "bg-stone-800 text-white"
+                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                  }`}
+                >
+                  {g}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Clear filters */}
         {hasActiveFilters && (
           <div className="px-5 pb-2">
             <button
               type="button"
-              onClick={() => { setActiveBodyTargets(new Set()); setActiveEnergies(new Set()); }}
+              onClick={() => { setActiveBodyTargets(new Set()); setActiveEnergies(new Set()); setActiveGroups(new Set()); }}
               className="text-[11px] text-stone-400 underline-offset-2 hover:text-stone-600 hover:underline"
             >
               Clear filters
@@ -892,65 +1028,57 @@ function AddPoseModal({
           </div>
         )}
 
-        {/* Pose list */}
+        {/* Pose list — flat, ranked best-match-first when searching */}
         <div className="overflow-y-auto px-5 pb-5">
-          {visibleCategories.length === 0 ? (
+          {visiblePoses.length === 0 ? (
             <p className="py-4 text-center text-sm text-stone-400">No poses found</p>
           ) : (
-            <div className="space-y-4">
-              {visibleCategories.map((cat) => (
-                <div key={cat.name}>
-                  <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-stone-400">{cat.name}</p>
-                  <div className="space-y-1.5">
-                    {cat.poses.map((option) => {
-                      const meta = getPoseMeta(option.pose);
-                      const regionClasses = meta?.bodyRegion ? getBodyRegionClasses(meta.bodyRegion) : null;
-                      const chips = meta?.bodyTargets.slice(0, 3) ?? [];
-                      return (
-                        <button
-                          key={option.pose}
-                          type="button"
-                          onClick={() => onAdd(targetSection.id, option)}
-                          className={`w-full rounded-xl border border-stone-200 px-4 py-3 text-left transition hover:brightness-95 ${
-                            regionClasses ? regionClasses.gradient : "bg-white"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 items-baseline gap-2">
-                              <span className="text-sm text-stone-800">{option.pose}</span>
-                              {meta?.sanskrit && (
-                                <span className="truncate text-[11px] italic text-stone-400">{meta.sanskrit}</span>
-                              )}
-                            </div>
-                            <span className="shrink-0 text-xs text-stone-500">{option.duration}</span>
-                          </div>
-                          {chips.length > 0 && (
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              {chips.map((t) => (
-                                <span
-                                  key={t}
-                                  className={`rounded-full px-2 py-0.5 text-[10px] transition ${
-                                    activeBodyTargets.has(t)
-                                      ? "bg-stone-800 text-white"
-                                      : "bg-white/60 text-stone-500"
-                                  }`}
-                                >
-                                  {getBodyTargetLabel(t)}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {meta?.modifications?.length ? (
-                            <p className="mt-1 text-[10px] italic text-stone-400">
-                              {meta.modifications[0]}
-                            </p>
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+            <div className="space-y-1.5">
+              {visiblePoses.map((meta) => {
+                const regionClasses = getBodyRegionClasses(meta.bodyRegion);
+                const chips = meta.bodyTargets.slice(0, 3);
+                return (
+                  <button
+                    key={meta.pose}
+                    type="button"
+                    onClick={() => onAdd(targetSection.id, { pose: meta.pose, duration: meta.duration, minutes: meta.minutes })}
+                    className={`w-full rounded-xl border border-stone-200 px-4 py-3 text-left transition hover:brightness-95 ${
+                      regionClasses ? regionClasses.gradient : "bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-baseline gap-2">
+                        <span className="text-sm text-stone-800">{meta.pose}</span>
+                        {meta.sanskrit && (
+                          <span className="truncate text-[11px] italic text-stone-400">{meta.sanskrit}</span>
+                        )}
+                      </div>
+                      <span className="shrink-0 text-xs text-stone-500">{meta.duration}</span>
+                    </div>
+                    {chips.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {chips.map((t) => (
+                          <span
+                            key={t}
+                            className={`rounded-full px-2 py-0.5 text-[10px] transition ${
+                              activeBodyTargets.has(t)
+                                ? "bg-stone-800 text-white"
+                                : "bg-white/60 text-stone-500"
+                            }`}
+                          >
+                            {getBodyTargetLabel(t)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {meta.modifications?.length ? (
+                      <p className="mt-1 text-[10px] italic text-stone-400">
+                        {meta.modifications[0]}
+                      </p>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -981,12 +1109,7 @@ function PeakPosePicker({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const query = search.trim().toLowerCase();
-  const visibleCategories = query
-    ? poseCategories
-        .map((cat) => ({ ...cat, poses: cat.poses.filter((p) => p.pose.toLowerCase().includes(query)) }))
-        .filter((cat) => cat.poses.length > 0)
-    : poseCategories;
+  const visiblePoses = search.trim() ? searchPoses(search.trim()) : allPoses;
 
   return (
     <div ref={ref} className="relative">
@@ -1027,30 +1150,27 @@ function PeakPosePicker({
                 <span className="text-stone-400">✕</span> Clear selection
               </button>
             )}
-            {visibleCategories.map((cat) => (
-              <div key={cat.name} className="mb-2">
-                <p className="px-3 pb-1 pt-1 text-xs font-medium uppercase tracking-[0.1em] text-stone-400">{cat.name}</p>
-                {cat.poses.map((p) => (
-                  <button
-                    key={p.pose}
-                    type="button"
-                    onClick={() => { onChange(p.pose); setOpen(false); setSearch(""); }}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition ${
-                      p.pose === value
-                        ? "bg-[#e8e3da] font-medium text-stone-900"
-                        : "text-stone-700 hover:bg-stone-50"
-                    }`}
-                  >
-                    <span>{p.pose}</span>
-                    {getPoseMeta(p.pose)?.sanskrit && (
-                      <span className="truncate text-[11px] italic text-stone-400">
-                        {getPoseMeta(p.pose)!.sanskrit}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            ))}
+            {visiblePoses.length === 0 ? (
+              <p className="px-3 py-3 text-center text-sm text-stone-400">No poses found</p>
+            ) : (
+              visiblePoses.map((p) => (
+                <button
+                  key={p.pose}
+                  type="button"
+                  onClick={() => { onChange(p.pose); setOpen(false); setSearch(""); }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition ${
+                    p.pose === value
+                      ? "bg-[#e8e3da] font-medium text-stone-900"
+                      : "text-stone-700 hover:bg-stone-50"
+                  }`}
+                >
+                  <span>{p.pose}</span>
+                  {p.sanskrit && (
+                    <span className="truncate text-[11px] italic text-stone-400">{p.sanskrit}</span>
+                  )}
+                </button>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -1216,7 +1336,9 @@ export default function BuilderPage() {
   };
 
   useEffect(() => {
+    // Hydrates client-only sequence state from browser storage.
     if (isNew) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCreatedAt(new Date().toISOString());
       setSections(ensureTrailingEmpty([]));
       return;
@@ -1456,6 +1578,78 @@ export default function BuilderPage() {
     updateSections((prev) => insertPoseBeforePeak(prev, poseName, peakPose));
   };
 
+  const makePoseItem = (poseName: string): PoseItem => {
+    const meta = getPoseMeta(poseName);
+    return {
+      id: generateId(),
+      pose: poseName,
+      duration: meta?.duration ?? "1 min",
+      minutes: meta?.minutes ?? 1,
+    };
+  };
+
+  const handleAuditAction = (action: AuditAction) => {
+    if (action.kind === "mark_both_sides") {
+      updateSections((prev) =>
+        prev.map((section) =>
+          section.id === action.sectionId ? { ...section, secondSide: true } : section,
+        ),
+      );
+      return;
+    }
+
+    if (action.kind === "add_savasana") {
+      updateSections((prev) => {
+        if (hasPose(prev, "Savasana")) {
+          return prev;
+        }
+        const closeIndex = prev.findIndex((section) =>
+          /close|savasana/i.test(section.title),
+        );
+        const newPose = makePoseItem("Savasana");
+        if (closeIndex !== -1) {
+          return prev.map((section, index) =>
+            index === closeIndex
+              ? { ...section, poses: [...section.poses, newPose] }
+              : section,
+          );
+        }
+        const trailingEmptyIndex = prev.findIndex((section, index) =>
+          index === prev.length - 1 && section.poses.length === 0,
+        );
+        const insertIndex = trailingEmptyIndex === -1 ? prev.length : trailingEmptyIndex;
+        const savasanaSection: Section = {
+          id: generateId(),
+          title: "Savasana",
+          secondSide: false,
+          poses: [newPose],
+        };
+        return [
+          ...prev.slice(0, insertIndex),
+          savasanaSection,
+          ...prev.slice(insertIndex),
+        ];
+      });
+      return;
+    }
+
+    if (action.kind === "add_constructive_rest") {
+      updateSections((prev) => {
+        const lastWheel = findLastPoseIndex(prev, "Wheel");
+        if (!lastWheel) return prev;
+        if (posesAfter(prev, lastWheel).includes("Constructive Rest")) return prev;
+
+        const newPose = makePoseItem("Constructive Rest");
+        return prev.map((section, sectionIndex) => {
+          if (sectionIndex !== lastWheel.sectionIndex) return section;
+          const nextPoses = [...section.poses];
+          nextPoses.splice(lastWheel.poseIndex + 1, 0, newPose);
+          return { ...section, poses: nextPoses };
+        });
+      });
+    }
+  };
+
   const sectionIds = sections.map((s) => s.id);
   const addPoseTargetSection = sections.find((s) => s.id === addPoseSectionId);
 
@@ -1466,6 +1660,11 @@ export default function BuilderPage() {
     return sum + s.poses.reduce((acc, p) => acc + p.minutes, 0);
   }, 0);
   const totalMinutes = baseMinutes + secondSideMinutes;
+
+  const auditReport = useMemo(
+    () => auditSequence({ sections, theme, peakPose }),
+    [sections, theme, peakPose],
+  );
 
   // ── Name editing ─────────────────────────────────────────────────────────
 
@@ -1572,6 +1771,10 @@ export default function BuilderPage() {
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
           >
+            {hasPoses && (
+              <SequenceAuditPanel report={auditReport} onAction={handleAuditAction} />
+            )}
+
             {peakReadiness && (
               <PeakReadinessPanel readiness={peakReadiness} onAddPrep={handleAddPrep} />
             )}

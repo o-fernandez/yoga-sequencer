@@ -20,6 +20,8 @@ export type PoseMeta = {
   pose: string;
   sanskrit?: string;
   aliases?: string[];
+  /** Curated families a pose belongs to (Surya A, Open Hips, …). Used as filter attributes. */
+  groups?: string[];
   duration: string;
   minutes: number;
   chakras: Chakra[];
@@ -549,10 +551,18 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
 
 // ─── Lookup map ──────────────────────────────────────────────────────────────
 
+/** Every curated family, in library order — used to build the group filter chips. */
+export const ALL_GROUPS: string[] = poseLibrary.map((cat) => cat.category);
+
+/** Flat list of every pose, each tagged with the family it came from. */
+export const allPoses: PoseMeta[] = [];
+
 const _poseMap = new Map<string, PoseMeta>();
 for (const cat of poseLibrary) {
   for (const pose of cat.poses) {
+    if (!pose.groups) pose.groups = [cat.category];
     _poseMap.set(pose.pose, pose);
+    allPoses.push(pose);
   }
 }
 
