@@ -47,7 +47,7 @@ function SequenceCard({
   const lastTaught = taughtDates.at(-1); // most recent past date
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white/90 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-stone-100/80 transition hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)]">
+    <article className="rounded-2xl border border-stone-300/40 bg-white/70 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] backdrop-blur-sm transition hover:bg-white/80 hover:shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
       <div className="flex items-start justify-between gap-4">
         <Link
           href={`/sequence/${sequence.id}`}
@@ -83,14 +83,14 @@ function SequenceCard({
         <div className="flex shrink-0 items-center gap-1">
           <Link
             href={`/sequence/${sequence.id}`}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-stone-600 transition hover:bg-stone-100 hover:text-stone-800"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-stone-600 transition hover:bg-[#e8e3da] hover:text-stone-800"
           >
             Open
           </Link>
           <button
             type="button"
             onClick={onDuplicate}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-700"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-stone-500 transition hover:bg-[#e8e3da] hover:text-stone-700"
           >
             Duplicate
           </button>
@@ -148,7 +148,7 @@ export default function LibraryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-100 px-6 py-12 text-stone-800">
+    <div className="min-h-screen bg-[#e8e3da] px-6 py-12 text-stone-800">
       <main className="mx-auto w-full max-w-2xl">
         <header className="mb-8 flex items-start justify-between gap-4">
           <div>
@@ -159,7 +159,7 @@ export default function LibraryPage() {
           </div>
           <Link
             href="/sequence/new"
-            className="mt-3 shrink-0 rounded-full border border-stone-300 bg-white/90 px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-white"
+            className="mt-3 shrink-0 rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 shadow-sm transition hover:bg-stone-700"
           >
             + New sequence
           </Link>
