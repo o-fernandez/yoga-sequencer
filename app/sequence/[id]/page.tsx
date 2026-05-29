@@ -1459,6 +1459,7 @@ export default function BuilderPage() {
   const sectionIds = sections.map((s) => s.id);
   const addPoseTargetSection = sections.find((s) => s.id === addPoseSectionId);
 
+  const hasPoses = sections.some((s) => s.poses.length > 0);
   const baseMinutes = sections.reduce((sum, s) => sum + s.poses.reduce((acc, p) => acc + p.minutes, 0), 0);
   const secondSideMinutes = sections.reduce((sum, s) => {
     if (!s.secondSide) return sum;
@@ -1483,7 +1484,21 @@ export default function BuilderPage() {
             </svg>
             Library
           </Link>
-          <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Yoga Flow</p>
+          {hasPoses ? (
+            <Link
+              href={`/sequence/${sequenceId}/teach`}
+              className="rounded-full border border-stone-300 bg-white px-4 py-1.5 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+            >
+              Teach
+            </Link>
+          ) : (
+            <span
+              className="cursor-not-allowed rounded-full border border-stone-200 px-4 py-1.5 text-sm font-medium text-stone-300"
+              title="Add a pose to teach this sequence"
+            >
+              Teach
+            </span>
+          )}
         </div>
 
         {/* Sequence metadata header */}
