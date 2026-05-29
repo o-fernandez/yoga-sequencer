@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useRef, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -27,110 +27,23 @@ import {
   saveSequence,
   type PoseItem,
   type Section,
-  type SequenceRecord,
 } from "@/lib/sequences";
+import {
+  poseLibrary,
+  getPoseMeta,
+  getBodyRegionClasses,
+  getBodyTargetLabel,
+} from "@/lib/poses";
 
 // ─── Pose library ───────────────────────────────────────────────────────────
 
 type PoseOption = { pose: string; duration: string; minutes: number };
 type PoseCategory = { name: string; poses: PoseOption[] };
 
-const poseCategories: PoseCategory[] = [
-  {
-    name: "Warm-up",
-    poses: [
-      { pose: "Centering Breath", duration: "2 min", minutes: 2 },
-      { pose: "Cat/Cow", duration: "2 min", minutes: 2 },
-      { pose: "Child's Pose", duration: "1 min", minutes: 1 },
-      { pose: "Downward Dog", duration: "1 min", minutes: 1 },
-      { pose: "Beast", duration: "1 min", minutes: 1 },
-    ],
-  },
-  {
-    name: "Surya A",
-    poses: [
-      { pose: "Mountain Pose", duration: "30 sec", minutes: 0.5 },
-      { pose: "Standing Forward Fold", duration: "30 sec", minutes: 0.5 },
-      { pose: "Half Lift", duration: "30 sec", minutes: 0.5 },
-      { pose: "Plank", duration: "30 sec", minutes: 0.5 },
-      { pose: "Chaturanga", duration: "30 sec", minutes: 0.5 },
-      { pose: "Upward Dog", duration: "30 sec", minutes: 0.5 },
-    ],
-  },
-  {
-    name: "Surya B",
-    poses: [
-      { pose: "Chair", duration: "30 sec", minutes: 0.5 },
-      { pose: "Warrior I", duration: "1 min", minutes: 1 },
-      { pose: "Vinyasa", duration: "30 sec", minutes: 0.5 },
-    ],
-  },
-  {
-    name: "Neutral Hips",
-    poses: [
-      { pose: "Low Lunge", duration: "1 min", minutes: 1 },
-      { pose: "Crescent", duration: "1 min", minutes: 1 },
-      { pose: "Twisted Crescent", duration: "1 min", minutes: 1 },
-      { pose: "Warrior III", duration: "1 min", minutes: 1 },
-      { pose: "Eagle", duration: "1 min", minutes: 1 },
-      { pose: "Side Plank", duration: "30 sec", minutes: 0.5 },
-      { pose: "Figure 4 Balance", duration: "1 min", minutes: 1 },
-      { pose: "Dancing Shiva", duration: "1 min", minutes: 1 },
-      { pose: "Standing Splits", duration: "1 min", minutes: 1 },
-      { pose: "Skandasana", duration: "1 min", minutes: 1 },
-    ],
-  },
-  {
-    name: "Open Hips",
-    poses: [
-      { pose: "Devotional Warrior", duration: "1 min", minutes: 1 },
-      { pose: "Warrior II", duration: "1 min", minutes: 1 },
-      { pose: "Peaceful Warrior", duration: "45 sec", minutes: 0.75 },
-      { pose: "Triangle", duration: "1 min", minutes: 1 },
-      { pose: "Extended Side Angle", duration: "1 min", minutes: 1 },
-      { pose: "Half Moon", duration: "1 min", minutes: 1 },
-      { pose: "Revolved Triangle", duration: "1 min", minutes: 1 },
-      { pose: "Prasarita", duration: "1 min", minutes: 1 },
-      { pose: "Lizard", duration: "1 min", minutes: 1 },
-      { pose: "Pyramid", duration: "1 min", minutes: 1 },
-    ],
-  },
-  {
-    name: "Midline Close",
-    poses: [
-      { pose: "Chair", duration: "30 sec", minutes: 0.5 },
-      { pose: "Revolved Chair", duration: "30 sec", minutes: 0.5 },
-      { pose: "Malasana", duration: "1 min", minutes: 1 },
-      { pose: "Crow", duration: "1 min", minutes: 1 },
-    ],
-  },
-  {
-    name: "Floor",
-    poses: [
-      { pose: "Forearm Plank", duration: "30 sec", minutes: 0.5 },
-      { pose: "Sphinx", duration: "1 min", minutes: 1 },
-      { pose: "Locust", duration: "30 sec", minutes: 0.5 },
-      { pose: "Bow", duration: "1 min", minutes: 1 },
-      { pose: "Bridge", duration: "1 min", minutes: 1 },
-      { pose: "Wheel", duration: "1 min", minutes: 1 },
-      { pose: "Constructive Rest", duration: "1 min", minutes: 1 },
-      { pose: "Supta Baddhakonasana", duration: "2 min", minutes: 2 },
-    ],
-  },
-  {
-    name: "Wind-down",
-    poses: [
-      { pose: "Pigeon", duration: "2 min", minutes: 2 },
-      { pose: "Gomukhasana", duration: "2 min", minutes: 2 },
-      { pose: "Janu Sirsasana", duration: "2 min", minutes: 2 },
-      { pose: "Stargazer", duration: "1 min", minutes: 1 },
-      { pose: "Seated Forward Fold", duration: "2 min", minutes: 2 },
-      { pose: "Supine Twist", duration: "2 min", minutes: 2 },
-      { pose: "Happy Baby", duration: "1 min", minutes: 1 },
-      { pose: "Savasana", duration: "5 min", minutes: 5 },
-    ],
-  },
-];
+const poseCategories: PoseCategory[] = poseLibrary.map((cat) => ({
+  name: cat.category,
+  poses: cat.poses.map((p) => ({ pose: p.pose, duration: p.duration, minutes: p.minutes })),
+}));
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -240,6 +153,81 @@ function PoseCueField({
   );
 }
 
+// ─── Energy arc helpers ──────────────────────────────────────────────────────
+
+type EnergyQuality = "heating" | "warming" | "cooling" | "grounding" | "neutral";
+
+function getDominantEnergy(section: Section): EnergyQuality | null {
+  const counts: Partial<Record<EnergyQuality, number>> = {};
+  for (const pose of section.poses) {
+    const meta = getPoseMeta(pose.pose);
+    if (meta) counts[meta.energy] = (counts[meta.energy] ?? 0) + 1;
+  }
+  const entries = Object.entries(counts) as [EnergyQuality, number][];
+  if (!entries.length) return null;
+  return entries.sort((a, b) => b[1] - a[1])[0][0];
+}
+
+const ENERGY_ARC_CLASSES: Record<EnergyQuality, string> = {
+  heating:  "bg-orange-400",
+  warming:  "bg-amber-400",
+  cooling:  "bg-sky-400",
+  grounding:"bg-slate-400",
+  neutral:  "bg-stone-300",
+};
+
+const ENERGY_ARC_LABELS: Record<EnergyQuality, string> = {
+  heating:  "Heating",
+  warming:  "Warming",
+  cooling:  "Cooling",
+  grounding:"Grounding",
+  neutral:  "Neutral",
+};
+
+function EnergyArc({ sections }: { sections: Section[] }) {
+  const blocks = sections
+    .map((s) => {
+      const minutes = s.secondSide
+        ? s.poses.reduce((sum, p) => sum + p.minutes, 0) * 2
+        : s.poses.reduce((sum, p) => sum + p.minutes, 0);
+      const energy = getDominantEnergy(s);
+      return { id: s.id, title: s.title, minutes, energy };
+    })
+    .filter((b) => b.minutes > 0 && b.energy);
+
+  const total = blocks.reduce((sum, b) => sum + b.minutes, 0);
+  if (!total || blocks.length === 0) return null;
+
+  return (
+    <div className="mb-5">
+      <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.16em] text-stone-400">
+        Energy arc
+      </p>
+      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full">
+        {blocks.map((block) => (
+          <div
+            key={block.id}
+            title={`${block.title} — ${ENERGY_ARC_LABELS[block.energy!]} (${block.minutes} min)`}
+            className={`h-full rounded-full transition-all ${ENERGY_ARC_CLASSES[block.energy!]}`}
+            style={{ flexGrow: block.minutes / total }}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex gap-0.5 overflow-hidden rounded-full">
+        {blocks.map((block) => (
+          <div
+            key={block.id}
+            className="overflow-hidden"
+            style={{ flexGrow: block.minutes / total }}
+          >
+            <p className="truncate text-[9px] text-stone-400">{block.title}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TrashDropZone() {
   const { setNodeRef, isOver } = useDroppable({ id: TRASH_ID });
   return (
@@ -271,7 +259,7 @@ function SectionPoseDropArea({
     <div
       ref={setNodeRef}
       className={`min-h-[2rem] rounded-xl transition ${
-        isOver ? "bg-stone-100/80 ring-1 ring-stone-300" : ""
+        isOver ? "bg-[#e8e3da]/80 ring-1 ring-stone-300" : ""
       } ${isEmpty ? "border border-dashed border-stone-200 px-3 py-4" : ""}`}
     >
       {isEmpty ? (
@@ -286,10 +274,12 @@ function SectionPoseDropArea({
 function SortableSectionPoseRow({
   sectionId,
   pose,
+  missingPrereqs,
   onUpdateCue,
 }: {
   sectionId: string;
   pose: PoseItem;
+  missingPrereqs: string[];
   onUpdateCue: (poseId: string, cue: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -301,8 +291,21 @@ function SortableSectionPoseRow({
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const [showWarning, setShowWarning] = useState(false);
+  const [showMods, setShowMods] = useState(false);
+  const meta = getPoseMeta(pose.pose);
+  const regionClasses = meta?.bodyRegion ? getBodyRegionClasses(meta.bodyRegion) : null;
+  const bodyChips = meta?.bodyTargets.slice(0, 3) ?? [];
+  const hasMods = (meta?.modifications?.length ?? 0) > 0;
+
   return (
-    <div ref={setNodeRef} style={style} className="rounded-xl border border-stone-200 bg-white px-4 py-3">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-xl border border-stone-200 px-4 py-3 ${
+        regionClasses ? regionClasses.gradient : "bg-white"
+      }`}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
@@ -316,9 +319,61 @@ function SortableSectionPoseRow({
               :::
             </button>
             <p className="text-sm text-stone-800">{pose.pose}</p>
+            {missingPrereqs.length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setShowWarning((v) => !v); }}
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-600 transition hover:bg-amber-200"
+                  aria-label="Prerequisite warning"
+                >
+                  <span className="text-[11px] font-bold leading-none">!</span>
+                </button>
+                {showWarning && (
+                  <div className="absolute left-0 top-7 z-10 w-52 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 shadow-md">
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+                      Not yet warmed up
+                    </p>
+                    <p className="text-xs text-amber-800">
+                      {missingPrereqs.map((t) => getBodyTargetLabel(t as Parameters<typeof getBodyTargetLabel>[0])).join(", ")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+          {bodyChips.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1 pl-8">
+              {bodyChips.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full bg-stone-200/70 px-2 py-0.5 text-[10px] text-stone-500"
+                >
+                  {getBodyTargetLabel(t)}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="pl-8">
             <PoseCueField cue={pose.cue} compact onSave={(cue) => onUpdateCue(pose.id, cue)} />
+            {hasMods && (
+              <div className="mt-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setShowMods((v) => !v); }}
+                  className="text-[10px] text-stone-400 hover:text-stone-600"
+                >
+                  {showMods ? "▾ modifications" : "▸ modifications"}
+                </button>
+                {showMods && (
+                  <ul className="mt-1 space-y-0.5">
+                    {meta!.modifications!.map((mod) => (
+                      <li key={mod} className="text-[11px] italic text-stone-500">· {mod}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <p className="shrink-0 text-xs text-stone-500">{pose.duration}</p>
@@ -330,6 +385,7 @@ function SortableSectionPoseRow({
 function SortableSectionBlock({
   section,
   isCollapsed,
+  missingPrereqsMap,
   onToggleCollapse,
   onUpdateTitle,
   onToggleSecondSide,
@@ -338,6 +394,7 @@ function SortableSectionBlock({
 }: {
   section: Section;
   isCollapsed: boolean;
+  missingPrereqsMap: Map<string, string[]>;
   onToggleCollapse: (id: string) => void;
   onUpdateTitle: (id: string, title: string) => void;
   onToggleSecondSide: (id: string) => void;
@@ -357,6 +414,33 @@ function SortableSectionBlock({
   const isCompact = section.poses.length === 1;
   const poseSortableIds = section.poses.map((p) => poseSortableId(section.id, p.id));
 
+  // Phase 3: section-level energy + body target aggregates
+  const sectionMetas = section.poses.map((p) => getPoseMeta(p.pose)).filter(Boolean);
+  const aggregateTargets = (() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const meta of sectionMetas) {
+      for (const t of meta!.bodyTargets) {
+        if (!seen.has(t)) { seen.add(t); result.push(t); }
+      }
+    }
+    return result.slice(0, 5);
+  })();
+  const dominantEnergy = (() => {
+    const counts: Record<string, number> = {};
+    for (const meta of sectionMetas) counts[meta!.energy] = (counts[meta!.energy] ?? 0) + 1;
+    const entries = Object.entries(counts);
+    if (!entries.length) return null;
+    return entries.sort((a, b) => b[1] - a[1])[0][0];
+  })();
+  const energyStyles: Record<string, string> = {
+    heating:  "bg-orange-100 text-orange-700",
+    warming:  "bg-amber-100 text-amber-700",
+    cooling:  "bg-sky-100 text-sky-700",
+    grounding:"bg-stone-200 text-stone-600",
+    neutral:  "bg-stone-100 text-stone-500",
+  };
+
   return (
     <article
       ref={setNodeRef}
@@ -364,14 +448,14 @@ function SortableSectionBlock({
       className={`shadow-[0_1px_1px_rgba(0,0,0,0.03)] ${
         isCompact
           ? "rounded-2xl border border-stone-200 bg-white/80 p-4"
-          : "rounded-2xl border border-stone-300 bg-stone-50/80 p-4 ring-1 ring-stone-200/80"
+          : "rounded-2xl border border-stone-300/50 bg-[#e8e3da]/70 p-4 ring-1 ring-stone-200/60"
       }`}
     >
       <div
         className={
           isCompact
             ? "mb-3"
-            : "mb-3 rounded-xl border border-dashed border-stone-300 bg-stone-100/60 px-3 py-2"
+            : "mb-3 rounded-xl border border-dashed border-stone-300 bg-stone-200/40 px-3 py-2"
         }
       >
         <div className="flex items-center justify-between gap-3">
@@ -429,6 +513,22 @@ function SortableSectionBlock({
             )}
           </div>
         </div>
+
+        {/* Phase 3: energy badge + aggregate body targets */}
+        {section.poses.length > 0 && (dominantEnergy || aggregateTargets.length > 0) && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {dominantEnergy && (
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${energyStyles[dominantEnergy] ?? energyStyles.neutral}`}>
+                {dominantEnergy}
+              </span>
+            )}
+            {aggregateTargets.map((t) => (
+              <span key={t} className="rounded-full bg-white/50 px-2 py-0.5 text-[10px] text-stone-500">
+                {getBodyTargetLabel(t as Parameters<typeof getBodyTargetLabel>[0])}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {isCollapsed ? (
@@ -446,6 +546,7 @@ function SortableSectionBlock({
                       key={pose.id}
                       sectionId={section.id}
                       pose={pose}
+                      missingPrereqs={missingPrereqsMap.get(pose.id) ?? []}
                       onUpdateCue={onUpdateCue}
                     />
                   ))}
@@ -458,7 +559,7 @@ function SortableSectionBlock({
             <button
               type="button"
               onClick={() => onAddPose(section.id)}
-              className="flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm text-stone-400 transition-colors hover:bg-stone-100/70 hover:text-stone-700"
+              className="flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm text-stone-400 transition-colors hover:bg-[#e8e3da]/70 hover:text-stone-700"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0">
                 <circle cx="10" cy="10" r="7.5" />
@@ -491,6 +592,30 @@ function SortableSectionBlock({
   );
 }
 
+// All unique body targets + energy qualities across the library, for filter chips
+const ALL_BODY_TARGETS = (() => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const cat of poseLibrary) {
+    for (const pose of cat.poses) {
+      for (const t of pose.bodyTargets) {
+        if (!seen.has(t)) { seen.add(t); result.push(t); }
+      }
+    }
+  }
+  return result;
+})();
+
+const ALL_ENERGIES: EnergyQuality[] = ["grounding", "warming", "heating", "cooling", "neutral"];
+
+const ENERGY_FILTER_CLASSES: Record<EnergyQuality, { active: string; inactive: string }> = {
+  grounding: { active: "bg-slate-500 text-white",   inactive: "bg-slate-100 text-slate-600 hover:bg-slate-200" },
+  warming:   { active: "bg-amber-400 text-white",   inactive: "bg-amber-50 text-amber-700 hover:bg-amber-100" },
+  heating:   { active: "bg-orange-500 text-white",  inactive: "bg-orange-50 text-orange-700 hover:bg-orange-100" },
+  cooling:   { active: "bg-sky-400 text-white",     inactive: "bg-sky-50 text-sky-700 hover:bg-sky-100" },
+  neutral:   { active: "bg-stone-500 text-white",   inactive: "bg-stone-100 text-stone-600 hover:bg-stone-200" },
+};
+
 function AddPoseModal({
   targetSection,
   onAdd,
@@ -501,35 +626,127 @@ function AddPoseModal({
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
+  const [activeBodyTargets, setActiveBodyTargets] = useState<Set<string>>(new Set());
+  const [activeEnergies, setActiveEnergies] = useState<Set<string>>(new Set());
+
+  const toggleBodyTarget = (t: string) =>
+    setActiveBodyTargets((prev) => { const next = new Set(prev); next.has(t) ? next.delete(t) : next.add(t); return next; });
+  const toggleEnergy = (e: string) =>
+    setActiveEnergies((prev) => { const next = new Set(prev); next.has(e) ? next.delete(e) : next.add(e); return next; });
+
   const query = search.trim().toLowerCase();
-  const visibleCategories = query
-    ? poseCategories
-        .map((cat) => ({ ...cat, poses: cat.poses.filter((p) => p.pose.toLowerCase().includes(query)) }))
-        .filter((cat) => cat.poses.length > 0)
-    : poseCategories;
+
+  const visibleCategories = poseLibrary
+    .map((cat) => ({
+      name: cat.category,
+      poses: cat.poses.filter((p) => {
+        const meta = getPoseMeta(p.pose)!;
+        // Search: match name or any body target label
+        if (query) {
+          const nameMatch = p.pose.toLowerCase().includes(query);
+          const targetMatch = meta.bodyTargets.some((t) =>
+            getBodyTargetLabel(t).toLowerCase().includes(query)
+          );
+          if (!nameMatch && !targetMatch) return false;
+        }
+        // Energy filter
+        if (activeEnergies.size > 0 && !activeEnergies.has(meta.energy)) return false;
+        // Body target filter (any match)
+        if (activeBodyTargets.size > 0 && !meta.bodyTargets.some((t) => activeBodyTargets.has(t))) return false;
+        return true;
+      }),
+    }))
+    .filter((cat) => cat.poses.length > 0);
+
+  const hasActiveFilters = activeBodyTargets.size > 0 || activeEnergies.size > 0;
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-stone-900/20 p-6">
-      <div className="flex max-h-[80vh] w-full max-w-sm flex-col rounded-2xl bg-stone-50 shadow-lg ring-1 ring-stone-200">
-        <div className="flex items-center justify-between p-5 pb-3">
+      <div className="flex max-h-[85vh] w-full max-w-sm flex-col rounded-2xl bg-stone-50 shadow-lg ring-1 ring-stone-200/60">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pb-2 pt-5">
           <h2 className="text-base font-medium text-stone-800">Add pose</h2>
-          <button type="button" onClick={onClose} className="rounded-full px-2 py-1 text-sm text-stone-500 transition hover:bg-stone-100 hover:text-stone-700" aria-label="Close">
+          <button type="button" onClick={onClose} className="rounded-full px-2 py-1 text-sm text-stone-500 transition hover:bg-[#e8e3da] hover:text-stone-700" aria-label="Close">
             Close
           </button>
         </div>
         <p className="px-5 pb-3 text-xs text-stone-500">
           Adding to <span className="font-medium text-stone-700">{targetSection.title}</span>
         </p>
+
+        {/* Search */}
         <div className="px-5 pb-3">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search poses…"
+            placeholder="Search by pose or body part…"
             autoFocus
             className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
           />
         </div>
+
+        {/* Energy filter */}
+        <div className="px-5 pb-2">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-stone-400">Energy</p>
+          <div className="flex flex-wrap gap-1.5">
+            {ALL_ENERGIES.map((e) => {
+              const active = activeEnergies.has(e);
+              return (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => toggleEnergy(e)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
+                    active ? ENERGY_FILTER_CLASSES[e].active : ENERGY_FILTER_CLASSES[e].inactive
+                  }`}
+                >
+                  {e}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Body target filter — horizontal scroll */}
+        <div className="px-5 pb-3">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-stone-400">Body part</p>
+          <div className="flex gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+            {ALL_BODY_TARGETS.map((t) => {
+              const active = activeBodyTargets.has(t);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => toggleBodyTarget(t)}
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
+                    active
+                      ? "bg-stone-800 text-white"
+                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                  }`}
+                >
+                  {getBodyTargetLabel(t as Parameters<typeof getBodyTargetLabel>[0])}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Clear filters */}
+        {hasActiveFilters && (
+          <div className="px-5 pb-2">
+            <button
+              type="button"
+              onClick={() => { setActiveBodyTargets(new Set()); setActiveEnergies(new Set()); }}
+              className="text-[11px] text-stone-400 underline-offset-2 hover:text-stone-600 hover:underline"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+
+        {/* Pose list */}
         <div className="overflow-y-auto px-5 pb-5">
           {visibleCategories.length === 0 ? (
             <p className="py-4 text-center text-sm text-stone-400">No poses found</p>
@@ -539,17 +756,47 @@ function AddPoseModal({
                 <div key={cat.name}>
                   <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-stone-400">{cat.name}</p>
                   <div className="space-y-1.5">
-                    {cat.poses.map((option) => (
-                      <button
-                        key={option.pose}
-                        type="button"
-                        onClick={() => onAdd(targetSection.id, option)}
-                        className="flex w-full items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-3 text-left transition hover:bg-stone-50"
-                      >
-                        <span className="text-sm text-stone-800">{option.pose}</span>
-                        <span className="text-xs text-stone-500">{option.duration}</span>
-                      </button>
-                    ))}
+                    {cat.poses.map((option) => {
+                      const meta = getPoseMeta(option.pose);
+                      const regionClasses = meta?.bodyRegion ? getBodyRegionClasses(meta.bodyRegion) : null;
+                      const chips = meta?.bodyTargets.slice(0, 3) ?? [];
+                      return (
+                        <button
+                          key={option.pose}
+                          type="button"
+                          onClick={() => onAdd(targetSection.id, option)}
+                          className={`w-full rounded-xl border border-stone-200 px-4 py-3 text-left transition hover:brightness-95 ${
+                            regionClasses ? regionClasses.gradient : "bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm text-stone-800">{option.pose}</span>
+                            <span className="shrink-0 text-xs text-stone-500">{option.duration}</span>
+                          </div>
+                          {chips.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {chips.map((t) => (
+                                <span
+                                  key={t}
+                                  className={`rounded-full px-2 py-0.5 text-[10px] transition ${
+                                    activeBodyTargets.has(t)
+                                      ? "bg-stone-800 text-white"
+                                      : "bg-white/60 text-stone-500"
+                                  }`}
+                                >
+                                  {getBodyTargetLabel(t)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {meta?.modifications?.length ? (
+                            <p className="mt-1 text-[10px] italic text-stone-400">
+                              {meta.modifications[0]}
+                            </p>
+                          ) : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -637,7 +884,7 @@ function PeakPosePicker({
                     onClick={() => { onChange(p.pose); setOpen(false); setSearch(""); }}
                     className={`flex w-full items-center rounded-lg px-3 py-1.5 text-left text-sm transition ${
                       p.pose === value
-                        ? "bg-stone-100 font-medium text-stone-900"
+                        ? "bg-[#e8e3da] font-medium text-stone-900"
                         : "text-stone-700 hover:bg-stone-50"
                     }`}
                   >
@@ -702,7 +949,7 @@ function TeachingDatesField({
                 key={date}
                 className={`inline-flex items-center gap-2 rounded-full py-1 pl-3 pr-2 text-xs ${
                   isPast
-                    ? "bg-stone-100 text-stone-600"
+                    ? "bg-[#e8e3da] text-stone-600"
                     : "border border-stone-300 bg-white text-stone-600"
                 }`}
               >
@@ -791,14 +1038,29 @@ export default function BuilderPage() {
   const [draggingSectionTitle, setDraggingSectionTitle] = useState<string | null>(null);
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
 
-  // Save state
-  const [saveFlash, setSaveFlash] = useState(false);
-
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  /** Always keep a trailing empty section so there's always one ready to use. */
+  const ensureTrailingEmpty = (secs: Section[]): Section[] => {
+    const last = secs[secs.length - 1];
+    if (!last || last.poses.length > 0) {
+      return [...secs, { id: generateId(), title: "New section", secondSide: false, poses: [] }];
+    }
+    return secs;
+  };
+
+  /** Wrapper around setSections that maintains the trailing-empty invariant. */
+  const updateSections = (updater: Section[] | ((prev: Section[]) => Section[])) => {
+    setSections((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      return ensureTrailingEmpty(next);
+    });
+  };
 
   useEffect(() => {
     if (isNew) {
       setCreatedAt(new Date().toISOString());
+      setSections(ensureTrailingEmpty([]));
       return;
     }
     const record = loadSequence(id);
@@ -808,43 +1070,32 @@ export default function BuilderPage() {
       setPeakPose(record.peakPose);
       setDates(record.dates ?? []);
       setCreatedAt(record.createdAt);
-      setSections(record.sections);
+      setSections(ensureTrailingEmpty(record.sections));
     } else {
       setName("Sequence not found");
       setCreatedAt(new Date().toISOString());
+      setSections(ensureTrailingEmpty([]));
     }
     setLoaded(true);
   }, [id, isNew]);
 
-  const buildRecord = (datesOverride?: string[]): SequenceRecord => ({
-    id: sequenceId,
-    name: name.trim() || "Untitled sequence",
-    theme: theme.trim() || undefined,
-    peakPose: peakPose || undefined,
-    dates: datesOverride ?? dates,
-    createdAt: createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    sections,
-  });
-
-  const handleSave = () => {
-    saveSequence(buildRecord());
-    setSaveFlash(true);
-    setTimeout(() => setSaveFlash(false), 2000);
-  };
-
-  /**
-   * Auto-save dates immediately when they change.
-   * Other metadata (name, theme, peak pose) requires an explicit Save click,
-   * but teaching dates are quick-logged (right after class) and easy to lose.
-   * New sequences are excluded — they need an explicit first save.
-   */
-  const handleDatesChange = (newDates: string[]) => {
-    setDates(newDates);
-    if (!isNew) {
-      saveSequence(buildRecord(newDates));
-    }
-  };
+  // Autosave: debounced 800ms on any meaningful change
+  useEffect(() => {
+    if (!loaded) return;
+    const timer = setTimeout(() => {
+      saveSequence({
+        id: sequenceId,
+        name: name.trim() || "Untitled sequence",
+        theme: theme.trim() || undefined,
+        peakPose: peakPose || undefined,
+        dates,
+        createdAt: createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sections,
+      });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [sections, name, theme, peakPose, dates, loaded, sequenceId, createdAt]);
 
 
   // ── Section/pose handlers ────────────────────────────────────────────────
@@ -888,7 +1139,7 @@ export default function BuilderPage() {
 
     if (activePose) {
       if (over.id === TRASH_ID) {
-        setSections((prev) =>
+        updateSections((prev) =>
           prev.map((s) =>
             s.id === activePose.sectionId
               ? { ...s, poses: s.poses.filter((p) => p.id !== activePose.poseId) }
@@ -900,7 +1151,7 @@ export default function BuilderPage() {
 
       let poseDropTargetSectionId: string | null = null;
 
-      setSections((current) => {
+      updateSections((current) => {
         let targetSectionId: string;
         let targetIndex: number;
 
@@ -959,7 +1210,7 @@ export default function BuilderPage() {
 
     if (isSectionSortableId(active.id, sections) && isSectionSortableId(over.id, sections)) {
       if (active.id === over.id) return;
-      setSections((current) => {
+      updateSections((current) => {
         const oldIndex = current.findIndex((s) => s.id === active.id);
         const newIndex = current.findIndex((s) => s.id === over.id);
         if (oldIndex === -1 || newIndex === -1) return current;
@@ -980,38 +1231,49 @@ export default function BuilderPage() {
       duration: option.duration,
       minutes: option.minutes,
     };
-    setSections((prev) =>
+    updateSections((prev) =>
       prev.map((s) => (s.id === sectionId ? { ...s, poses: [...s.poses, newPose] } : s)),
     );
     setAddPoseSectionId(null);
   };
 
-  const addSection = () => {
-    setSections((prev) => [
-      ...prev,
-      { id: generateId(), title: "New section", secondSide: false, poses: [] },
-    ]);
-  };
-
   const updateSectionTitle = (sectionId: string, title: string) => {
-    setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, title } : s)));
+    updateSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, title } : s)));
   };
 
   const toggleSecondSide = (sectionId: string) => {
-    setSections((prev) =>
+    updateSections((prev) =>
       prev.map((s) => (s.id === sectionId ? { ...s, secondSide: !s.secondSide } : s)),
     );
   };
 
   const updatePoseCue = (poseId: string, cue: string) => {
     const nextCue = cue || undefined;
-    setSections((prev) =>
+    updateSections((prev) =>
       prev.map((s) => ({
         ...s,
         poses: s.poses.map((p) => (p.id === poseId ? { ...p, cue: nextCue } : p)),
       })),
     );
   };
+
+  // Phase 5: compute missing prerequisites per pose
+  const missingPrereqsMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const warmedSoFar = new Set<string>();
+    for (const section of sections) {
+      for (const pose of section.poses) {
+        const meta = getPoseMeta(pose.pose);
+        if (meta?.prerequisites?.length) {
+          const missing = meta.prerequisites.filter((p) => !warmedSoFar.has(p));
+          if (missing.length) map.set(pose.id, missing);
+        }
+        // accumulate this pose's targets for subsequent poses
+        meta?.bodyTargets.forEach((t) => warmedSoFar.add(t));
+      }
+    }
+    return map;
+  }, [sections]);
 
   const sectionIds = sections.map((s) => s.id);
   const addPoseTargetSection = sections.find((s) => s.id === addPoseSectionId);
@@ -1029,8 +1291,8 @@ export default function BuilderPage() {
   const saveName = () => { setName(nameDraft.trim() || "Untitled sequence"); setEditingName(false); };
 
   return (
-    <div className="min-h-screen bg-stone-100 px-6 py-12 text-stone-800">
-      <main className="mx-auto w-full max-w-2xl rounded-3xl bg-stone-50/90 p-8 shadow-sm ring-1 ring-stone-200/70 sm:p-10">
+    <div className="min-h-screen bg-[#e8e3da] px-6 py-12 text-stone-800">
+      <main className="mx-auto w-full max-w-2xl rounded-3xl bg-white/70 p-8 shadow-sm backdrop-blur-sm ring-1 ring-stone-300/30 sm:p-10">
 
         {/* Back nav */}
         <div className="mb-6 flex items-center justify-between">
@@ -1098,7 +1360,7 @@ export default function BuilderPage() {
 
             <TeachingDatesField
               dates={dates}
-              onChange={handleDatesChange}
+              onChange={setDates}
             />
           </div>
         </header>
@@ -1114,6 +1376,8 @@ export default function BuilderPage() {
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
           >
+            <EnergyArc sections={sections} />
+
             <SortableContext items={sectionIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
                 {sections.map((section) => (
@@ -1121,6 +1385,7 @@ export default function BuilderPage() {
                     key={section.id}
                     section={section}
                     isCollapsed={isSectionCollapsed(section.id)}
+                    missingPrereqsMap={missingPrereqsMap}
                     onToggleCollapse={toggleSectionCollapse}
                     onUpdateTitle={updateSectionTitle}
                     onToggleSecondSide={toggleSecondSide}
@@ -1150,16 +1415,6 @@ export default function BuilderPage() {
           </DndContext>
         )}
 
-        <div className="mt-6 flex justify-center">
-          <button
-            type="button"
-            onClick={addSection}
-            className="rounded-full border border-stone-300 bg-white/90 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-white"
-          >
-            Add Section
-          </button>
-        </div>
-
         {addPoseSectionId && addPoseTargetSection && (
           <AddPoseModal
             targetSection={addPoseTargetSection}
@@ -1169,22 +1424,10 @@ export default function BuilderPage() {
         )}
 
         {/* Footer */}
-        <footer className="mt-8 space-y-3">
+        <footer className="mt-8">
           <div className="rounded-2xl bg-white/80 px-5 py-4 text-sm text-stone-600 ring-1 ring-stone-200/70">
             <p className="font-medium text-stone-800">Estimated class time: {formatMinutes(totalMinutes)}</p>
           </div>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            className={`w-full rounded-2xl px-5 py-3.5 text-sm font-medium transition ${
-              saveFlash
-                ? "bg-stone-700 text-white"
-                : "bg-stone-900 text-white hover:bg-stone-800"
-            }`}
-          >
-            {saveFlash ? "Saved!" : "Save"}
-          </button>
         </footer>
       </main>
     </div>
