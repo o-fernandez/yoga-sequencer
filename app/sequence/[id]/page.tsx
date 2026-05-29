@@ -6,7 +6,8 @@ import { useParams } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useDroppable,
   useSensor,
@@ -523,7 +524,7 @@ function SortableSectionPoseRow({
               type="button"
               {...attributes}
               {...listeners}
-              className="cursor-grab text-stone-400 active:cursor-grabbing"
+              className="touch-none select-none cursor-grab text-stone-400 active:cursor-grabbing"
               aria-label={`Drag ${pose.pose}`}
             >
               :::
@@ -1316,7 +1317,13 @@ export default function BuilderPage() {
   const [draggingSectionTitle, setDraggingSectionTitle] = useState<string | null>(null);
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // Mouse: tiny movement starts a drag immediately. Touch: a short hold engages the
+  // drag so a quick flick still scrolls the page — combined with `touch-none` on the
+  // handles, this stops the page from panning while you reorder on mobile.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+  );
 
   /** Always keep a trailing empty section so there's always one ready to use. */
   const ensureTrailingEmpty = (secs: Section[]): Section[] => {

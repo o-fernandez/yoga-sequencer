@@ -129,6 +129,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
     poses: [
       {
         pose: "Chair", sanskrit: "Utkatasana", aliases: ["fierce pose", "awkward chair", "utkata", "utkatasana", "lightning bolt"],
+        groups: ["Surya B", "Midline Close"],
         duration: "30 sec", minutes: 0.5,
         chakras: ["root", "solar"], bodyTargets: ["quads", "glutes", "core"], poseType: "standing", energy: "heating",
         bodyRegion: "lower_body",
@@ -322,13 +323,6 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
   {
     category: "Midline Close",
     poses: [
-      {
-        pose: "Chair", sanskrit: "Utkatasana", aliases: ["fierce pose", "awkward chair", "utkata", "utkatasana", "lightning bolt"],
-        duration: "30 sec", minutes: 0.5,
-        chakras: ["root", "solar"], bodyTargets: ["quads", "glutes", "core"], poseType: "standing", energy: "heating",
-        bodyRegion: "lower_body",
-        modifications: ["Less depth in the bend", "Arms to heart center"],
-      },
       {
         pose: "Revolved Chair", sanskrit: "Parivrtta Utkatasana", aliases: ["twisted chair", "prayer twist", "parivrtta utkatasana", "chair twist"],
         duration: "30 sec", minutes: 0.5,

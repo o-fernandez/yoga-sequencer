@@ -21,9 +21,12 @@ for (const pose of allPoses) {
   });
 }
 
+// Fuse is now only a typo/abbreviation fallback — exact, prefix and substring
+// hits are caught literally before we ever consult it, so we can keep the
+// threshold fairly tight to avoid a long tail of weak fuzzy matches.
 const fuse = new Fuse(searchEntries, {
   keys: ["searchName"],
-  threshold: 0.45,         // higher = more lenient
+  threshold: 0.3,
   distance: 100,
   includeScore: true,
   minMatchCharLength: 2,
@@ -62,16 +65,20 @@ function rankedMatches(query: string): Ranked[] {
     }
   });
 
-  // Fuzzy fill for typos / abbreviations, but only for poses no literal hit caught.
-  for (const r of fuse.search(q)) {
-    if (matched.has(r.item.pose.pose)) continue;
-    matched.add(r.item.pose.pose);
-    out.push({
-      pose: r.item.pose,
-      matchedOn: r.item.searchName,
-      score: Math.max(0.2, r.score ?? 1),
-      tie: 1000,
-    });
+  // Fuzzy fallback for typos — only when nothing matched literally. Yoga's
+  // shared Sanskrit suffixes (…asana) make fuzzy matching noisy, so we never
+  // pad a good literal result set with fuzzy guesses.
+  if (out.length === 0) {
+    for (const r of fuse.search(q)) {
+      if (matched.has(r.item.pose.pose)) continue;
+      matched.add(r.item.pose.pose);
+      out.push({
+        pose: r.item.pose,
+        matchedOn: r.item.searchName,
+        score: Math.max(0.2, r.score ?? 1),
+        tie: 1000,
+      });
+    }
   }
 
   out.sort((a, b) => a.score - b.score || a.tie - b.tie);
