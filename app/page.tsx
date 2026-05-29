@@ -157,12 +157,20 @@ export default function LibraryPage() {
               Your Sequences
             </h1>
           </div>
-          <Link
-            href="/sequence/new"
-            className="mt-3 shrink-0 rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 shadow-sm transition hover:bg-stone-700"
-          >
-            + New sequence
-          </Link>
+          <div className="mt-3 flex shrink-0 items-center gap-2">
+            <Link
+              href="/quick-entry"
+              className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+            >
+              Quick entry
+            </Link>
+            <Link
+              href="/sequence/new"
+              className="rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 shadow-sm transition hover:bg-stone-700"
+            >
+              + New sequence
+            </Link>
+          </div>
         </header>
 
         {!loaded ? (

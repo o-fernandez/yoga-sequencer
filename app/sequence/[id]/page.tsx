@@ -33,7 +33,10 @@ import {
   getPoseMeta,
   getBodyRegionClasses,
   getBodyTargetLabel,
+  type PoseMeta,
 } from "@/lib/poses";
+import { searchPoses } from "@/lib/pose-matcher";
+import { BulkPoseEntry } from "@/components/bulk-pose-entry";
 import {
   computePeakReadiness,
   insertPoseBeforePeak,
@@ -415,7 +418,12 @@ function SortableSectionPoseRow({
             >
               :::
             </button>
-            <p className="text-sm text-stone-800">{pose.pose}</p>
+            <div className="flex min-w-0 items-baseline gap-2">
+              <p className="text-sm text-stone-800">{pose.pose}</p>
+              {meta?.sanskrit && (
+                <span className="truncate text-[11px] italic text-stone-400">{meta.sanskrit}</span>
+              )}
+            </div>
             {missingPrereqs.length > 0 && (
               <div className="relative">
                 <button
@@ -716,12 +724,15 @@ const ENERGY_FILTER_CLASSES: Record<EnergyQuality, { active: string; inactive: s
 function AddPoseModal({
   targetSection,
   onAdd,
+  onAddMany,
   onClose,
 }: {
   targetSection: Section;
   onAdd: (sectionId: string, option: PoseOption) => void;
+  onAddMany: (sectionId: string, poses: PoseMeta[]) => void;
   onClose: () => void;
 }) {
+  const [mode, setMode] = useState<"search" | "paste">("search");
   const [search, setSearch] = useState("");
   const [activeBodyTargets, setActiveBodyTargets] = useState<Set<string>>(new Set());
   const [activeEnergies, setActiveEnergies] = useState<Set<string>>(new Set());
@@ -732,15 +743,19 @@ function AddPoseModal({
     setActiveEnergies((prev) => { const next = new Set(prev); next.has(e) ? next.delete(e) : next.add(e); return next; });
 
   const query = search.trim().toLowerCase();
+  // Fuzzy name match (tolerant of typos/abbreviations); body-part text search stays exact.
+  const fuzzyMatchNames = search.trim()
+    ? new Set(searchPoses(search.trim()).map((p) => p.pose))
+    : null;
 
   const visibleCategories = poseLibrary
     .map((cat) => ({
       name: cat.category,
       poses: cat.poses.filter((p) => {
         const meta = getPoseMeta(p.pose)!;
-        // Search: match name or any body target label
+        // Search: fuzzy match on name, or substring match on any body target label
         if (query) {
-          const nameMatch = p.pose.toLowerCase().includes(query);
+          const nameMatch = fuzzyMatchNames!.has(p.pose);
           const targetMatch = meta.bodyTargets.some((t) =>
             getBodyTargetLabel(t).toLowerCase().includes(query)
           );
@@ -772,6 +787,40 @@ function AddPoseModal({
           Adding to <span className="font-medium text-stone-700">{targetSection.title}</span>
         </p>
 
+        {/* Mode tabs */}
+        <div className="mx-5 mb-3 flex gap-1 rounded-lg bg-stone-100 p-1">
+          {(["search", "paste"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                mode === m ? "bg-white text-stone-800 shadow-sm" : "text-stone-500 hover:text-stone-700"
+              }`}
+            >
+              {m === "search" ? "Search" : "Quick entry"}
+            </button>
+          ))}
+        </div>
+
+        {mode === "paste" ? (
+          <div className="overflow-y-auto px-5 pb-5">
+            <BulkPoseEntry
+              autoFocus
+              renderFooter={(resolved) => (
+                <button
+                  type="button"
+                  disabled={resolved.length === 0}
+                  onClick={() => { onAddMany(targetSection.id, resolved); onClose(); }}
+                  className="rounded-full bg-stone-800 px-5 py-2.5 text-sm font-medium text-stone-100 shadow-sm transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Add {resolved.length} pose{resolved.length === 1 ? "" : "s"}
+                </button>
+              )}
+            />
+          </div>
+        ) : (
+        <>
         {/* Search */}
         <div className="px-5 pb-3">
           <input
@@ -867,7 +916,12 @@ function AddPoseModal({
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm text-stone-800">{option.pose}</span>
+                            <div className="flex min-w-0 items-baseline gap-2">
+                              <span className="text-sm text-stone-800">{option.pose}</span>
+                              {meta?.sanskrit && (
+                                <span className="truncate text-[11px] italic text-stone-400">{meta.sanskrit}</span>
+                              )}
+                            </div>
                             <span className="shrink-0 text-xs text-stone-500">{option.duration}</span>
                           </div>
                           {chips.length > 0 && (
@@ -900,6 +954,8 @@ function AddPoseModal({
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );
@@ -979,13 +1035,18 @@ function PeakPosePicker({
                     key={p.pose}
                     type="button"
                     onClick={() => { onChange(p.pose); setOpen(false); setSearch(""); }}
-                    className={`flex w-full items-center rounded-lg px-3 py-1.5 text-left text-sm transition ${
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition ${
                       p.pose === value
                         ? "bg-[#e8e3da] font-medium text-stone-900"
                         : "text-stone-700 hover:bg-stone-50"
                     }`}
                   >
-                    {p.pose}
+                    <span>{p.pose}</span>
+                    {getPoseMeta(p.pose)?.sanskrit && (
+                      <span className="truncate text-[11px] italic text-stone-400">
+                        {getPoseMeta(p.pose)!.sanskrit}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1334,6 +1395,19 @@ export default function BuilderPage() {
     setAddPoseSectionId(null);
   };
 
+  const handleAddPoses = (sectionId: string, poses: PoseMeta[]) => {
+    const newPoses: PoseItem[] = poses.map((p) => ({
+      id: generateId(),
+      pose: p.pose,
+      duration: p.duration,
+      minutes: p.minutes,
+    }));
+    updateSections((prev) =>
+      prev.map((s) => (s.id === sectionId ? { ...s, poses: [...s.poses, ...newPoses] } : s)),
+    );
+    setAddPoseSectionId(null);
+  };
+
   const updateSectionTitle = (sectionId: string, title: string) => {
     updateSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, title } : s)));
   };
@@ -1526,14 +1600,6 @@ export default function BuilderPage() {
           </DndContext>
         )}
 
-        {addPoseSectionId && addPoseTargetSection && (
-          <AddPoseModal
-            targetSection={addPoseTargetSection}
-            onAdd={handleAddPose}
-            onClose={() => setAddPoseSectionId(null)}
-          />
-        )}
-
         {/* Footer */}
         <footer className="mt-8">
           <div className="rounded-2xl bg-white/80 px-5 py-4 text-sm text-stone-600 ring-1 ring-stone-200/70">
@@ -1541,6 +1607,16 @@ export default function BuilderPage() {
           </div>
         </footer>
       </main>
+
+      {/* Rendered outside <main> so backdrop-blur-sm doesn't create a stacking context that traps fixed positioning */}
+      {addPoseSectionId && addPoseTargetSection && (
+        <AddPoseModal
+          targetSection={addPoseTargetSection}
+          onAdd={handleAddPose}
+          onAddMany={handleAddPoses}
+          onClose={() => setAddPoseSectionId(null)}
+        />
+      )}
     </div>
   );
 }
