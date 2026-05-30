@@ -435,6 +435,7 @@ function SequenceAuditPanel({
 
 function SectionPoseRow({
   pose,
+  showAnalysis,
   missingPrereqs,
   isPeak,
   peakReadiness,
@@ -448,6 +449,7 @@ function SectionPoseRow({
   onAddPrep,
 }: {
   pose: PoseItem;
+  showAnalysis: boolean;
   missingPrereqs: string[];
   isPeak: boolean;
   peakReadiness: PeakReadiness | null;
@@ -485,7 +487,7 @@ function SectionPoseRow({
         isPeak
           ? "rounded-xl border border-amber-300/60 bg-amber-50/50 px-4 py-3 shadow-[0_1px_4px_rgba(180,140,80,0.12)] ring-1 ring-amber-200/60"
           : `rounded-xl border border-stone-200 px-4 py-3 ${
-              regionClasses ? regionClasses.gradient : "bg-white"
+              showAnalysis && regionClasses ? regionClasses.gradient : "bg-white"
             }`
       }
     >
@@ -503,7 +505,7 @@ function SectionPoseRow({
                 <span className="truncate text-[11px] italic text-stone-400">{meta.sanskrit}</span>
               )}
             </div>
-            {missingPrereqs.length > 0 && (
+            {showAnalysis && missingPrereqs.length > 0 && (
               <div className="relative">
                 <button
                   type="button"
@@ -526,7 +528,7 @@ function SectionPoseRow({
               </div>
             )}
           </div>
-          {bodyChips.length > 0 && (
+          {showAnalysis && bodyChips.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1">
               {bodyChips.map((t) => (
                 <span
@@ -642,6 +644,7 @@ function SectionPoseRow({
 function SortableSectionBlock({
   section,
   isCollapsed,
+  showAnalysis,
   missingPrereqsMap,
   peakPoseId,
   peakReadiness,
@@ -662,6 +665,7 @@ function SortableSectionBlock({
 }: {
   section: Section;
   isCollapsed: boolean;
+  showAnalysis: boolean;
   missingPrereqsMap: Map<string, string[]>;
   peakPoseId: string | null;
   peakReadiness: PeakReadiness | null;
@@ -798,7 +802,7 @@ function SortableSectionBlock({
         </div>
 
         {/* Phase 3: energy badge + aggregate body targets */}
-        {section.poses.length > 0 && (dominantEnergy || aggregateTargets.length > 0) && (
+        {showAnalysis && section.poses.length > 0 && (dominantEnergy || aggregateTargets.length > 0) && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {dominantEnergy && (
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${energyStyles[dominantEnergy] ?? energyStyles.neutral}`}>
@@ -822,6 +826,7 @@ function SortableSectionBlock({
                 <SectionPoseRow
                   key={pose.id}
                   pose={pose}
+                  showAnalysis={showAnalysis}
                   missingPrereqs={missingPrereqsMap.get(pose.id) ?? []}
                   isPeak={pose.id === peakPoseId}
                   peakReadiness={peakReadiness}
@@ -1498,10 +1503,13 @@ export default function BuilderPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [theme, setTheme] = useState("");
+  const [editingTheme, setEditingTheme] = useState(false);
+  const [themeDraft, setThemeDraft] = useState("");
   const [peakPose, setPeakPose] = useState<string | undefined>(undefined);
   const [dates, setDates] = useState<TeachEntry[]>([]);
   const [createdAt, setCreatedAt] = useState("");
   const [loaded, setLoaded] = useState(isNew);
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   // Builder state
   const [sections, setSections] = useState<Section[]>([]);
@@ -1550,6 +1558,7 @@ export default function BuilderPage() {
       setDates(record.dates ?? []);
       setCreatedAt(record.createdAt);
       setSections(ensureTrailingEmpty(record.sections));
+      setShowAnalysis(record.showAnalysis ?? false);
     } else {
       setName("Sequence not found");
       setCreatedAt(new Date().toISOString());
@@ -1571,10 +1580,11 @@ export default function BuilderPage() {
         createdAt: createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         sections,
+        showAnalysis,
       });
     }, 800);
     return () => clearTimeout(timer);
-  }, [sections, name, theme, peakPose, dates, loaded, sequenceId, createdAt]);
+  }, [sections, name, theme, peakPose, dates, loaded, sequenceId, createdAt, showAnalysis]);
 
 
   // ── Section/pose handlers ────────────────────────────────────────────────
@@ -1870,6 +1880,9 @@ export default function BuilderPage() {
   const startEditingName = () => { setNameDraft(name); setEditingName(true); };
   const saveName = () => { setName(nameDraft.trim() || "Untitled sequence"); setEditingName(false); };
 
+  const startEditingTheme = () => { setThemeDraft(theme); setEditingTheme(true); };
+  const saveTheme = () => { setTheme(themeDraft); setEditingTheme(false); };
+
   return (
     <div className="min-h-screen bg-[#e8e3da] px-6 py-12 text-stone-800">
       <main className="mx-auto w-full max-w-2xl rounded-3xl bg-white/70 p-8 shadow-sm backdrop-blur-sm ring-1 ring-stone-300/30 sm:p-10">
@@ -1882,27 +1895,42 @@ export default function BuilderPage() {
             </svg>
             Library
           </Link>
-          {hasPoses ? (
-            <Link
-              href={`/sequence/${sequenceId}/teach`}
-              className="rounded-full border border-stone-300 bg-white px-4 py-1.5 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowAnalysis((v) => !v)}
+              className={`flex items-center gap-1 text-sm transition ${
+                showAnalysis
+                  ? "font-medium text-stone-700"
+                  : "text-stone-400 hover:text-stone-600"
+              }`}
             >
-              Teach
-            </Link>
-          ) : (
-            <span
-              className="cursor-not-allowed rounded-full border border-stone-200 px-4 py-1.5 text-sm font-medium text-stone-300"
-              title="Add a pose to teach this sequence"
-            >
-              Teach
-            </span>
-          )}
+              {showAnalysis && <span className="text-[10px] leading-none">✦</span>}
+              Analysis
+              <span className="text-[10px] leading-none">{showAnalysis ? "↘" : "↗"}</span>
+            </button>
+            {hasPoses ? (
+              <Link
+                href={`/sequence/${sequenceId}/teach`}
+                className="rounded-full border border-stone-300 bg-white px-4 py-1.5 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+              >
+                Teach
+              </Link>
+            ) : (
+              <span
+                className="cursor-not-allowed rounded-full border border-stone-200 px-4 py-1.5 text-sm font-medium text-stone-300"
+                title="Add a pose to teach this sequence"
+              >
+                Teach
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Sequence metadata header */}
         <header className="mb-8">
           {/* Name */}
-          <div className="mb-3">
+          <div className="mb-1">
             {editingName ? (
               <input
                 type="text"
@@ -1930,28 +1958,38 @@ export default function BuilderPage() {
             )}
           </div>
 
-          {/* Metadata fields */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs text-stone-400">
-                Theme
-              </label>
+          {/* Theme — elevated as identity subtitle */}
+          <div className="mb-4">
+            {editingTheme ? (
               <input
                 type="text"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value)}
-                placeholder="Intention or theme…"
-                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
+                value={themeDraft}
+                onChange={(e) => setThemeDraft(e.target.value)}
+                onBlur={saveTheme}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveTheme();
+                  if (e.key === "Escape") setEditingTheme(false);
+                }}
+                autoFocus
+                placeholder="add a theme or intention…"
+                className="w-full bg-transparent font-display text-base font-light italic text-stone-500 placeholder:text-stone-300 focus:outline-none"
               />
-            </div>
+            ) : (
+              <button
+                type="button"
+                onClick={startEditingTheme}
+                className={`text-left font-display text-base font-light italic transition hover:text-stone-500 ${
+                  theme ? "text-stone-400" : "text-stone-300"
+                }`}
+              >
+                {theme || "add a theme or intention…"}
+              </button>
+            )}
+          </div>
 
-            <div>
-              <label className="mb-1 block text-xs text-stone-400">
-                Peak pose
-              </label>
-              <PeakPosePicker value={peakPose} onChange={setPeakPose} />
-            </div>
-
+          {/* Peak pose */}
+          <div className="flex items-center gap-2">
+            <PeakPosePicker value={peakPose} onChange={setPeakPose} />
           </div>
         </header>
 
@@ -1966,11 +2004,11 @@ export default function BuilderPage() {
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
           >
-            {hasPoses && (
+            {showAnalysis && hasPoses && (
               <SequenceAuditPanel report={auditReport} onAction={handleAuditAction} />
             )}
 
-            <EnergyArc sections={sections} />
+            {showAnalysis && <EnergyArc sections={sections} />}
 
             <SortableContext items={sectionIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
@@ -1979,6 +2017,7 @@ export default function BuilderPage() {
                     key={section.id}
                     section={section}
                     isCollapsed={isSectionCollapsed(section.id)}
+                    showAnalysis={showAnalysis}
                     missingPrereqsMap={missingPrereqsMap}
                     peakPoseId={peakPoseId}
                     peakReadiness={peakReadiness}

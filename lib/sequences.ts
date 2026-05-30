@@ -79,6 +79,7 @@ export type SequenceRecord = {
   createdAt: string;
   updatedAt: string;
   sections: Section[];
+  showAnalysis?: boolean;
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
