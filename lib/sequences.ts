@@ -55,21 +55,39 @@ export type Section = {
   poses: PoseItem[];
 };
 
+export type TeachEntry = {
+  date: string;   // ISO date YYYY-MM-DD
+  notes?: string;
+};
+
 export type SequenceRecord = {
   id: string;
   name: string;
   theme?: string;
   peakPose?: string;
   /**
-   * Unified list of ISO date strings (YYYY-MM-DD).
+   * Teaching log: each entry is a date (past or future) with optional notes.
    * Dates in the past = taught; dates in the future = planned.
-   * Replaces the old separate taughtDates + intendedDate fields.
    */
-  dates: string[];
+  dates: TeachEntry[];
   createdAt: string;
   updatedAt: string;
   sections: Section[];
 };
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+export function isTaught(entry: TeachEntry): boolean {
+  return entry.date <= todayISO();
+}
+
+export function sortedTaughtEntries(dates: TeachEntry[]): TeachEntry[] {
+  return dates.filter(isTaught).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function sortedUpcomingEntries(dates: TeachEntry[]): TeachEntry[] {
+  return dates.filter((e) => !isTaught(e)).sort((a, b) => a.date.localeCompare(b.date));
+}
 
 const STORAGE_KEY = "yoga-sequences";
 
@@ -77,20 +95,26 @@ export function generateId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
-/** Migrate a record: handle old schema (taughtDates → dates) and normalize all pose items. */
+/** Migrate a record: handle old schemas and normalize all pose items. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): SequenceRecord {
   let record: SequenceRecord;
-  if (Array.isArray(raw.dates)) {
+  if (Array.isArray(raw.dates) && raw.dates.length > 0 && typeof raw.dates[0] === "object") {
+    // Already TeachEntry[]
     record = raw as SequenceRecord;
+  } else if (Array.isArray(raw.dates)) {
+    // string[] → TeachEntry[]
+    const merged = new Set<string>(raw.dates as string[]);
+    record = { ...raw, dates: [...merged].sort().map((d) => ({ date: d })) } as SequenceRecord;
   } else {
+    // Oldest schema: taughtDates + intendedDate
     const merged = new Set<string>();
     if (Array.isArray(raw.taughtDates)) raw.taughtDates.forEach((d: string) => merged.add(d));
     if (typeof raw.intendedDate === "string" && raw.intendedDate) merged.add(raw.intendedDate);
     const rest = { ...raw };
     delete rest.taughtDates;
     delete rest.intendedDate;
-    record = { ...rest, dates: [...merged].sort() } as SequenceRecord;
+    record = { ...rest, dates: [...merged].sort().map((d) => ({ date: d })) } as SequenceRecord;
   }
   return {
     ...record,
@@ -119,7 +143,7 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     name: "Shoulder Opening — Building Rounds",
     theme: "Heart and shoulder opening",
     peakPose: "Crow",
-    dates: ["2026-03-15", "2026-04-12", "2026-05-31"],
+    dates: [{ date: "2026-03-15" }, { date: "2026-04-12" }, { date: "2026-05-31" }],
     createdAt: "2026-03-12T09:00:00.000Z",
     updatedAt: "2026-05-20T09:00:00.000Z",
     sections: [
@@ -214,7 +238,7 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     name: "Grounding Power Flow",
     theme: "Steadiness and grounding",
     peakPose: "Half Moon",
-    dates: ["2026-02-08", "2026-04-26", "2026-05-17"],
+    dates: [{ date: "2026-02-08" }, { date: "2026-04-26" }, { date: "2026-05-17" }],
     createdAt: "2026-02-05T09:00:00.000Z",
     updatedAt: "2026-05-17T09:00:00.000Z",
     sections: [
@@ -309,7 +333,7 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     name: "Hip Opening — 45 min",
     theme: "Releasing the hips",
     peakPose: "Lizard",
-    dates: ["2026-05-10", "2026-06-07"],
+    dates: [{ date: "2026-05-10" }, { date: "2026-06-07" }],
     createdAt: "2026-05-06T09:00:00.000Z",
     updatedAt: "2026-05-10T09:00:00.000Z",
     sections: [

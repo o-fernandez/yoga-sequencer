@@ -25,7 +25,7 @@ function totalPoses(seq: SequenceRecord): number {
 /** Max date from a sequence's dates array; falls back to updatedAt for sorting. */
 function sortKey(seq: SequenceRecord): string {
   if (seq.dates && seq.dates.length > 0) {
-    return [...seq.dates].sort().at(-1)!;
+    return [...seq.dates.map((e) => e.date)].sort().at(-1)!;
   }
   return seq.updatedAt;
 }
@@ -111,11 +111,10 @@ function SequenceCard({
 }) {
   const poseCount = totalPoses(sequence);
   const today = new Date().toISOString().slice(0, 10);
-  const allDates = [...(sequence.dates ?? [])].sort();
-  const taughtDates = allDates.filter((d) => d <= today);
-  const plannedDates = allDates.filter((d) => d > today);
-  const nextPlanned = plannedDates[0];    // earliest future date
-  const lastTaught = taughtDates.at(-1); // most recent past date
+  const taughtDates = (sequence.dates ?? []).filter((e) => e.date <= today);
+  const plannedDates = (sequence.dates ?? []).filter((e) => e.date > today).sort((a, b) => a.date.localeCompare(b.date));
+  const nextPlanned = plannedDates[0]?.date;
+  const lastTaught = [...taughtDates].sort((a, b) => b.date.localeCompare(a.date))[0]?.date;
 
   const handlers = useLongPress(
     onEnterSelection,

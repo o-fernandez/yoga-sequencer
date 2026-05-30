@@ -27,8 +27,11 @@ import {
   saveSequence,
   normalizePoseItem,
   formatBreathEstimate,
+  sortedTaughtEntries,
+  sortedUpcomingEntries,
   type PoseItem,
   type Section,
+  type TeachEntry,
 } from "@/lib/sequences";
 import {
   poseLibrary,
@@ -1222,116 +1225,178 @@ function PeakPosePicker({
   );
 }
 
-// ─── Teaching dates ──────────────────────────────────────────────────────────
+// ─── Teaching Log ─────────────────────────────────────────────────────────────
 
-function TeachingDatesField({
+function NoteEditor({
+  initialValue,
+  onSave,
+}: {
+  initialValue: string;
+  onSave: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(initialValue);
+  return (
+    <textarea
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => onSave(draft)}
+      placeholder="How did it go? What would you change?"
+      rows={3}
+      className="mt-2 w-full resize-none rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 placeholder:text-stone-300 focus:border-stone-400 focus:outline-none"
+    />
+  );
+}
+
+function TeachingLog({
   dates,
   onChange,
 }: {
-  dates: string[];
-  onChange: (dates: string[]) => void;
+  dates: TeachEntry[];
+  onChange: (dates: TeachEntry[]) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [addingDate, setAddingDate] = useState(false);
-  const [newDateInput, setNewDateInput] = useState(today);
+  const past = sortedTaughtEntries(dates);
+  const upcoming = sortedUpcomingEntries(dates);
+  const [addingEntry, setAddingEntry] = useState(false);
+  const [entryDate, setEntryDate] = useState(today);
+  const [entryNotes, setEntryNotes] = useState("");
+  // Set true onMouseDown on Cancel so the form-level onBlur skips saving.
+  // mousedown fires before blur, so the ref is readable when blur runs.
+  const cancelingRef = useRef(false);
 
-  const sorted = [...dates].sort();
-
-  const remove = (date: string) => {
-    onChange(dates.filter((d) => d !== date));
+  const openForm = () => {
+    setEntryDate(today);
+    setEntryNotes("");
+    cancelingRef.current = false;
+    setAddingEntry(true);
   };
 
-  const openPicker = () => {
-    setNewDateInput(today); // default to today each time
-    setAddingDate(true);
-  };
-
-  const addDate = () => {
-    if (!newDateInput || dates.includes(newDateInput)) {
-      setAddingDate(false);
-      return;
+  const saveEntry = () => {
+    if (entryDate && !dates.some((e) => e.date === entryDate)) {
+      onChange([...dates, { date: entryDate, notes: entryNotes.trim() || undefined }]);
     }
-    onChange([...dates, newDateInput].sort());
-    setAddingDate(false);
+    setAddingEntry(false);
   };
 
-  return (
-    <div className="col-span-2">
-      <label className="mb-2 block text-xs text-stone-400">
-        Teaching dates
-      </label>
+  const handleFormBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node) && !cancelingRef.current) {
+      saveEntry();
+    }
+    cancelingRef.current = false;
+  };
 
-      {/* Date chips */}
-      {sorted.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {sorted.map((date) => {
-            const isPast = date <= today;
-            return (
-              <span
-                key={date}
-                className={`inline-flex items-center gap-2 rounded-full py-1 pl-3 pr-2 text-xs ${
-                  isPast
-                    ? "bg-[#e8e3da] text-stone-600"
-                    : "border border-stone-300 bg-white text-stone-600"
-                }`}
-              >
-                <span className="text-[10px] font-medium uppercase tracking-wider text-stone-400">
-                  {isPast ? "Taught" : "Planned"}
-                </span>
-                <span>{formatDateShort(date)}</span>
-                <button
-                  type="button"
-                  onClick={() => remove(date)}
-                  className="flex h-4 w-4 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-200 hover:text-stone-700"
-                  aria-label={`Remove ${date}`}
-                >
-                  ×
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      )}
+  const removeDate = (date: string) => {
+    onChange(dates.filter((e) => e.date !== date));
+  };
 
-      {/* Add date */}
-      {addingDate ? (
-        <div className="flex items-center gap-1.5">
-          <input
-            type="date"
-            value={newDateInput}
-            onChange={(e) => setNewDateInput(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter") addDate();
-              if (e.key === "Escape") setAddingDate(false);
-            }}
-            className="rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 focus:border-stone-400 focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={addDate}
-            className="rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-medium text-stone-700 transition hover:bg-stone-50"
-          >
-            Add
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddingDate(false)}
-            className="text-xs text-stone-400 hover:text-stone-600"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
+  const updateNotes = (date: string, notes: string) => {
+    onChange(dates.map((e) => (e.date === date ? { ...e, notes: notes.trim() || undefined } : e)));
+  };
+
+  const renderEntry = (entry: TeachEntry) => (
+    <div key={entry.date} className="rounded-xl border border-stone-200/60 bg-white/60 px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-stone-700">{formatDateShort(entry.date)}</span>
         <button
           type="button"
-          onClick={openPicker}
-          className="text-xs text-stone-400 transition hover:text-stone-600"
+          onClick={() => removeDate(entry.date)}
+          className="text-xs text-stone-400 transition hover:text-red-400"
         >
-          + Add date
+          Remove
         </button>
-      )}
+      </div>
+      <NoteEditor
+        key={entry.date}
+        initialValue={entry.notes ?? ""}
+        onSave={(val) => updateNotes(entry.date, val)}
+      />
     </div>
+  );
+
+  return (
+    <section className="mt-8">
+      {/* Header */}
+      <div className="mb-3 flex items-baseline justify-between gap-4">
+        <span className="font-display text-lg font-light tracking-tight text-stone-800">
+          Teaching Log
+        </span>
+        {!addingEntry && (
+          <button
+            type="button"
+            onClick={openForm}
+            className="rounded-lg border border-stone-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-stone-600 transition hover:bg-white hover:text-stone-800"
+          >
+            + Log a class
+          </button>
+        )}
+      </div>
+
+      {/* Log entry form */}
+      <div className={addingEntry ? "mb-4" : ""}>
+        {addingEntry ? (
+          <div
+            className="rounded-xl border border-stone-200 bg-white/80 px-4 py-3"
+            onBlur={handleFormBlur}
+          >
+            <input
+              type="date"
+              value={entryDate}
+              autoFocus
+              onChange={(e) => setEntryDate(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { cancelingRef.current = true; setAddingEntry(false); }
+              }}
+              className="rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-700 focus:border-stone-400 focus:outline-none"
+            />
+            <textarea
+              value={entryNotes}
+              onChange={(e) => setEntryNotes(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { cancelingRef.current = true; setAddingEntry(false); }
+              }}
+              placeholder="How did it go? What would you change?"
+              rows={3}
+              className="mt-2 w-full resize-none rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 placeholder:text-stone-300 focus:border-stone-400 focus:outline-none"
+            />
+            <div className="mt-2">
+              <button
+                type="button"
+                onMouseDown={() => { cancelingRef.current = true; }}
+                onClick={() => setAddingEntry(false)}
+                className="text-xs text-stone-400 transition hover:text-stone-600"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Entries — always visible */}
+      <div className="space-y-4">
+        {upcoming.length > 0 && (
+          <div>
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-stone-400">
+              Upcoming
+            </p>
+            <div className="space-y-2">{upcoming.map(renderEntry)}</div>
+          </div>
+        )}
+
+        {past.length > 0 && (
+          <div>
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-stone-400">
+              Past
+            </p>
+            <div className="space-y-2">{past.map(renderEntry)}</div>
+          </div>
+        )}
+
+        {dates.length === 0 && !addingEntry && (
+          <p className="text-sm text-stone-400">No entries yet.</p>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1349,7 +1414,7 @@ export default function BuilderPage() {
   const [nameDraft, setNameDraft] = useState("");
   const [theme, setTheme] = useState("");
   const [peakPose, setPeakPose] = useState<string | undefined>(undefined);
-  const [dates, setDates] = useState<string[]>([]);
+  const [dates, setDates] = useState<TeachEntry[]>([]);
   const [createdAt, setCreatedAt] = useState("");
   const [loaded, setLoaded] = useState(isNew);
 
@@ -1780,10 +1845,6 @@ export default function BuilderPage() {
               <PeakPosePicker value={peakPose} onChange={setPeakPose} />
             </div>
 
-            <TeachingDatesField
-              dates={dates}
-              onChange={setDates}
-            />
           </div>
         </header>
 
@@ -1841,6 +1902,9 @@ export default function BuilderPage() {
             </DragOverlay>
           </DndContext>
         )}
+
+        {/* Teaching Log */}
+        <TeachingLog dates={dates} onChange={setDates} />
 
         {/* Footer */}
         <footer className="mt-8">
