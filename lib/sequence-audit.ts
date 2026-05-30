@@ -4,7 +4,7 @@ import {
   type BodyTarget,
   type PoseType,
 } from "./poses";
-import type { Section } from "./sequences";
+import { roundsMultiplier, type Section } from "./sequences";
 
 export type AuditSeverity = "critical" | "warning" | "note" | "good";
 
@@ -123,7 +123,7 @@ const THEME_FOCI: { keywords: string[]; focus: ThemeFocus }[] = [
 
 function sectionMinutes(section: Section): number {
   const oneSide = section.poses.reduce((sum, pose) => sum + pose.minutes, 0);
-  return section.secondSide ? oneSide * 2 : oneSide;
+  return oneSide * roundsMultiplier(section);
 }
 
 function isEmpty(section: Section): boolean {

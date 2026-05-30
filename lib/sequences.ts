@@ -53,7 +53,13 @@ export type Section = {
   title: string;
   secondSide: boolean;
   poses: PoseItem[];
+  rounds?: number;
 };
+
+/** Combined multiplier for rounds and both-sides. Replaces ad-hoc secondSide*2 patterns. */
+export function roundsMultiplier(section: Section): number {
+  return (section.rounds ?? 1) * (section.secondSide ? 2 : 1);
+}
 
 export type TeachEntry = {
   date: string;   // ISO date YYYY-MM-DD

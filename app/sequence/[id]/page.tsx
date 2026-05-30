@@ -27,12 +27,14 @@ import {
   saveSequence,
   normalizePoseItem,
   formatBreathEstimate,
+  roundsMultiplier,
   sortedTaughtEntries,
   sortedUpcomingEntries,
   type PoseItem,
   type Section,
   type TeachEntry,
 } from "@/lib/sequences";
+import { SECTION_TEMPLATES, sectionFromTemplate } from "@/lib/section-templates";
 import {
   poseLibrary,
   allPoses,
@@ -223,9 +225,7 @@ const ENERGY_ARC_LABELS: Record<EnergyQuality, string> = {
 function EnergyArc({ sections }: { sections: Section[] }) {
   const blocks = sections
     .map((s) => {
-      const minutes = s.secondSide
-        ? s.poses.reduce((sum, p) => sum + p.minutes, 0) * 2
-        : s.poses.reduce((sum, p) => sum + p.minutes, 0);
+      const minutes = s.poses.reduce((sum, p) => sum + p.minutes, 0) * roundsMultiplier(s);
       const energy = getDominantEnergy(s);
       return { id: s.id, title: s.title, minutes, energy };
     })
@@ -442,6 +442,7 @@ function SectionPoseRow({
   canMoveDown,
   onMove,
   onRemove,
+  onAddPoseBelow,
   onUpdateCue,
   onUpdateBreaths,
   onAddPrep,
@@ -454,6 +455,7 @@ function SectionPoseRow({
   canMoveDown: boolean;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
+  onAddPoseBelow: () => void;
   onUpdateCue: (poseId: string, cue: string) => void;
   onUpdateBreaths: (poseId: string, breaths: number) => void;
   onAddPrep: (poseName: string) => void;
@@ -605,13 +607,24 @@ function SectionPoseRow({
                 </svg>
               </button>
               {menuOpen && (
-                <div className="absolute right-0 top-8 z-20 w-36 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                <div className="absolute right-0 top-8 z-20 w-40 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => { onAddPoseBelow(); setMenuOpen(false); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-700 transition hover:bg-stone-50"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3.5 w-3.5 shrink-0">
+                      <circle cx="8" cy="8" r="6" />
+                      <path strokeLinecap="round" d="M8 5.5v5M5.5 8h5" />
+                    </svg>
+                    Add pose below
+                  </button>
                   <button
                     type="button"
                     onClick={() => { onRemove(); setMenuOpen(false); }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 shrink-0">
                       <path fillRule="evenodd" d="M6.5 1.75a.25.25 0 0 1 .25-.25h2.5a.25.25 0 0 1 .25.25V3h-3V1.75ZM11 3V1.75A1.75 1.75 0 0 0 9.25 0h-2.5A1.75 1.75 0 0 0 5 1.75V3H2.5a.75.75 0 0 0 0 1.5h.75v8.75A1.75 1.75 0 0 0 5 15h6a1.75 1.75 0 0 0 1.75-1.75V4.5h.75a.75.75 0 0 0 0-1.5H11ZM6.75 6.5a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 1.5 0v-5Zm4 0a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 1.5 0v-5Z" clipRule="evenodd" />
                     </svg>
                     Remove
@@ -637,9 +650,12 @@ function SortableSectionBlock({
   onToggleCollapse,
   onUpdateTitle,
   onToggleSecondSide,
+  onUpdateRounds,
   onUpdateCue,
   onUpdateBreaths,
   onAddPose,
+  onAddPoseBelow,
+  onApplyTemplate,
   onAddPrep,
   onMovePose,
   onRemovePose,
@@ -654,9 +670,12 @@ function SortableSectionBlock({
   onToggleCollapse: (id: string) => void;
   onUpdateTitle: (id: string, title: string) => void;
   onToggleSecondSide: (id: string) => void;
+  onUpdateRounds: (id: string, rounds: number) => void;
   onUpdateCue: (poseId: string, cue: string) => void;
   onUpdateBreaths: (poseId: string, breaths: number) => void;
   onAddPose: (id: string) => void;
+  onAddPoseBelow: (sectionId: string, afterPoseId: string) => void;
+  onApplyTemplate: (sectionId: string, templateId: string) => void;
   onAddPrep: (poseName: string) => void;
   onMovePose: (sectionId: string, poseId: string, dir: -1 | 1) => void;
   onRemovePose: (sectionId: string, poseId: string) => void;
@@ -664,13 +683,15 @@ function SortableSectionBlock({
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: section.id });
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
   const startEditingTitle = () => { setTitleDraft(section.title); setEditingTitle(true); };
   const saveTitle = () => { onUpdateTitle(section.id, titleDraft.trim() || "Section"); setEditingTitle(false); };
 
   const style = { transform: CSS.Transform.toString(transform), transition };
-  const sectionMinutes = section.poses.reduce((sum, p) => sum + p.minutes, 0);
-  const totalSectionMinutes = section.secondSide ? sectionMinutes * 2 : sectionMinutes;
+  const sectionPoseMinutes = section.poses.reduce((sum, p) => sum + p.minutes, 0);
+  const totalSectionMinutes = sectionPoseMinutes * roundsMultiplier(section);
+  const rounds = section.rounds ?? 1;
   const isCompact = section.poses.length === 1;
 
   // Phase 3: section-level energy + body target aggregates
@@ -762,7 +783,10 @@ function SortableSectionBlock({
           </div>
           <div className="flex shrink-0 flex-col items-end gap-0.5">
             {section.poses.length > 0 && (
-              <p className="text-xs text-stone-500">{formatMinutes(totalSectionMinutes)}</p>
+              <p className="text-xs text-stone-500">
+                {rounds > 1 && <span className="mr-1 font-medium text-stone-600">×{rounds}</span>}
+                {formatMinutes(totalSectionMinutes)}
+              </p>
             )}
             {isCollapsed && section.poses.length > 0 && (
               <p className="text-xs text-stone-400">
@@ -805,6 +829,7 @@ function SortableSectionBlock({
                   canMoveDown={pose.id !== lastPoseId}
                   onMove={(dir) => onMovePose(section.id, pose.id, dir)}
                   onRemove={() => onRemovePose(section.id, pose.id)}
+                  onAddPoseBelow={() => onAddPoseBelow(section.id, pose.id)}
                   onUpdateCue={onUpdateCue}
                   onUpdateBreaths={onUpdateBreaths}
                   onAddPrep={onAddPrep}
@@ -812,12 +837,47 @@ function SortableSectionBlock({
               ))}
             </div>
           ) : (
-            <p className="rounded-xl border border-dashed border-stone-200 px-3 py-4 text-center text-xs text-stone-400">
-              No poses yet
-            </p>
+            <div className="rounded-xl border border-dashed border-stone-200 px-3 py-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTemplatePicker((v) => !v)}
+                  className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white/70 px-3 py-1.5 text-xs text-stone-500 transition hover:border-stone-300 hover:text-stone-700"
+                >
+                  Start from template
+                  <span aria-hidden>{showTemplatePicker ? "▴" : "▾"}</span>
+                </button>
+                <span className="text-[11px] text-stone-300">or</span>
+                <button
+                  type="button"
+                  onClick={() => onAddPose(section.id)}
+                  className="flex items-center gap-1.5 rounded-lg px-1 py-1.5 text-xs text-stone-400 transition hover:text-stone-700"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3.5 w-3.5 shrink-0">
+                    <circle cx="8" cy="8" r="6" />
+                    <path strokeLinecap="round" d="M8 5.5v5M5.5 8h5" />
+                  </svg>
+                  Add pose
+                </button>
+              </div>
+              {showTemplatePicker && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {SECTION_TEMPLATES.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => { onApplyTemplate(section.id, template.id); setShowTemplatePicker(false); }}
+                      className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 hover:text-stone-800"
+                    >
+                      {template.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
-          <div className="mt-3 flex items-center justify-between gap-3 border-t border-stone-200/80 pt-3">
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-stone-200/80 pt-3">
             <button
               type="button"
               onClick={() => onAddPose(section.id)}
@@ -830,22 +890,47 @@ function SortableSectionBlock({
               Add pose
             </button>
             {section.poses.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onToggleSecondSide(section.id)}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  section.secondSide
-                    ? "bg-stone-800 text-white"
-                    : "border border-stone-200 bg-white text-stone-400 hover:border-stone-300 hover:text-stone-600"
-                }`}
-              >
-                {section.secondSide && (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 shrink-0">
-                    <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" />
-                  </svg>
-                )}
-                Repeat on other side
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateRounds(section.id, Math.max(1, rounds - 1))}
+                    disabled={rounds <= 1}
+                    aria-label="Decrease rounds"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600 disabled:pointer-events-none disabled:opacity-30"
+                  >
+                    −
+                  </button>
+                  <span className={`min-w-[2rem] text-center text-xs tabular-nums ${rounds > 1 ? "font-medium text-stone-700" : "text-stone-300"}`}>
+                    ×{rounds}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateRounds(section.id, Math.min(6, rounds + 1))}
+                    disabled={rounds >= 6}
+                    aria-label="Increase rounds"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600 disabled:pointer-events-none disabled:opacity-30"
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onToggleSecondSide(section.id)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    section.secondSide
+                      ? "bg-stone-800 text-white"
+                      : "border border-stone-200 bg-white text-stone-400 hover:border-stone-300 hover:text-stone-600"
+                  }`}
+                >
+                  {section.secondSide && (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 shrink-0">
+                      <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  Repeat on other side
+                </button>
+              </div>
             )}
           </div>
         </>
@@ -1420,7 +1505,7 @@ export default function BuilderPage() {
 
   // Builder state
   const [sections, setSections] = useState<Section[]>([]);
-  const [addPoseSectionId, setAddPoseSectionId] = useState<string | null>(null);
+  const [addPoseTarget, setAddPoseTarget] = useState<{ sectionId: string; insertAfterPoseId?: string } | null>(null);
   const [draggingSectionTitle, setDraggingSectionTitle] = useState<string | null>(null);
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
 
@@ -1578,12 +1663,21 @@ export default function BuilderPage() {
     );
   };
 
-  const handleAddPose = (sectionId: string, option: PoseOption) => {
+  const handleAddPose = (sectionId: string, option: PoseOption, insertAfterPoseId?: string) => {
     const newPose = normalizePoseItem({ id: generateId(), pose: option.pose, duration: "", minutes: 0 });
     updateSections((prev) =>
-      prev.map((s) => (s.id === sectionId ? { ...s, poses: [...s.poses, newPose] } : s)),
+      prev.map((s) => {
+        if (s.id !== sectionId) return s;
+        if (insertAfterPoseId) {
+          const idx = s.poses.findIndex((p) => p.id === insertAfterPoseId);
+          const next = [...s.poses];
+          next.splice(idx + 1, 0, newPose);
+          return { ...s, poses: next };
+        }
+        return { ...s, poses: [...s.poses, newPose] };
+      }),
     );
-    setAddPoseSectionId(null);
+    setAddPoseTarget(null);
   };
 
   const handleAddPoses = (sectionId: string, poses: PoseMeta[]) => {
@@ -1591,7 +1685,7 @@ export default function BuilderPage() {
     updateSections((prev) =>
       prev.map((s) => (s.id === sectionId ? { ...s, poses: [...s.poses, ...newPoses] } : s)),
     );
-    setAddPoseSectionId(null);
+    setAddPoseTarget(null);
   };
 
   const updatePoseBreaths = (poseId: string, breaths: number) => {
@@ -1612,6 +1706,21 @@ export default function BuilderPage() {
   const toggleSecondSide = (sectionId: string) => {
     updateSections((prev) =>
       prev.map((s) => (s.id === sectionId ? { ...s, secondSide: !s.secondSide } : s)),
+    );
+  };
+
+  const updateSectionRounds = (sectionId: string, rounds: number) => {
+    updateSections((prev) =>
+      prev.map((s) => (s.id === sectionId ? { ...s, rounds: rounds > 1 ? rounds : undefined } : s)),
+    );
+  };
+
+  const applyTemplate = (sectionId: string, templateId: string) => {
+    const template = SECTION_TEMPLATES.find((t) => t.id === templateId);
+    if (!template) return;
+    const newSection = sectionFromTemplate(template);
+    updateSections((prev) =>
+      prev.map((s) => (s.id === sectionId ? { ...newSection, id: s.id } : s)),
     );
   };
 
@@ -1743,15 +1852,13 @@ export default function BuilderPage() {
   };
 
   const sectionIds = sections.map((s) => s.id);
-  const addPoseTargetSection = sections.find((s) => s.id === addPoseSectionId);
+  const addPoseTargetSection = sections.find((s) => s.id === addPoseTarget?.sectionId);
 
   const hasPoses = sections.some((s) => s.poses.length > 0);
-  const baseMinutes = sections.reduce((sum, s) => sum + s.poses.reduce((acc, p) => acc + p.minutes, 0), 0);
-  const secondSideMinutes = sections.reduce((sum, s) => {
-    if (!s.secondSide) return sum;
-    return sum + s.poses.reduce((acc, p) => acc + p.minutes, 0);
-  }, 0);
-  const totalMinutes = baseMinutes + secondSideMinutes;
+  const totalMinutes = sections.reduce(
+    (sum, s) => sum + s.poses.reduce((acc, p) => acc + p.minutes, 0) * roundsMultiplier(s),
+    0,
+  );
 
   const auditReport = useMemo(
     () => auditSequence({ sections, theme, peakPose }),
@@ -1880,9 +1987,12 @@ export default function BuilderPage() {
                     onToggleCollapse={toggleSectionCollapse}
                     onUpdateTitle={updateSectionTitle}
                     onToggleSecondSide={toggleSecondSide}
+                    onUpdateRounds={updateSectionRounds}
                     onUpdateCue={updatePoseCue}
                     onUpdateBreaths={updatePoseBreaths}
-                    onAddPose={setAddPoseSectionId}
+                    onAddPose={(id) => setAddPoseTarget({ sectionId: id })}
+                    onAddPoseBelow={(sectionId, afterPoseId) => setAddPoseTarget({ sectionId, insertAfterPoseId: afterPoseId })}
+                    onApplyTemplate={applyTemplate}
                     onAddPrep={handleAddPrep}
                     onMovePose={movePose}
                     onRemovePose={removePose}
@@ -1920,12 +2030,12 @@ export default function BuilderPage() {
       </main>
 
       {/* Rendered outside <main> so backdrop-blur-sm doesn't create a stacking context that traps fixed positioning */}
-      {addPoseSectionId && addPoseTargetSection && (
+      {addPoseTarget && addPoseTargetSection && (
         <AddPoseModal
           targetSection={addPoseTargetSection}
-          onAdd={handleAddPose}
+          onAdd={(sectionId, option) => handleAddPose(sectionId, option, addPoseTarget.insertAfterPoseId)}
           onAddMany={handleAddPoses}
-          onClose={() => setAddPoseSectionId(null)}
+          onClose={() => setAddPoseTarget(null)}
         />
       )}
     </div>

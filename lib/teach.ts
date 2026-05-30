@@ -63,18 +63,24 @@ function stepsForSide(
 /**
  * Flatten sections into the ordered teaching steps. Empty sections (including
  * the builder's trailing empty section) are skipped. Both-sides sections are
- * duplicated into two labelled passes so scroll position and totals reflect
- * what actually happens in the room.
+ * duplicated into two labelled passes. Sections with rounds > 1 generate that
+ * many passes so the teach view matches what actually happens in the room.
  */
 export function buildTeachSteps(sections: Section[]): TeachStep[] {
   const steps: TeachStep[] = [];
   for (const section of sections) {
     if (section.poses.length === 0) continue;
-    if (section.secondSide) {
-      steps.push(...stepsForSide(section, `${section.id}::a`, "First side"));
-      steps.push(...stepsForSide(section, `${section.id}::b`, "Second side"));
-    } else {
-      steps.push(...stepsForSide(section, section.id, undefined));
+    const rounds = section.rounds ?? 1;
+    for (let round = 0; round < rounds; round++) {
+      const roundSuffix = rounds > 1 ? `::r${round + 1}` : "";
+      const titleSuffix = rounds > 1 ? ` (${round + 1}/${rounds})` : "";
+      const titled = rounds > 1 ? { ...section, title: `${section.title}${titleSuffix}` } : section;
+      if (section.secondSide) {
+        steps.push(...stepsForSide(titled, `${section.id}${roundSuffix}::a`, "First side"));
+        steps.push(...stepsForSide(titled, `${section.id}${roundSuffix}::b`, "Second side"));
+      } else {
+        steps.push(...stepsForSide(titled, `${section.id}${roundSuffix}`, undefined));
+      }
     }
   }
   return steps;

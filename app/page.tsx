@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -101,6 +101,8 @@ function SequenceCard({
   onOpen,
   onToggleSelect,
   onEnterSelection,
+  onDuplicate,
+  onDelete,
 }: {
   sequence: SequenceRecord;
   selectionMode: boolean;
@@ -108,6 +110,8 @@ function SequenceCard({
   onOpen: () => void;
   onToggleSelect: () => void;
   onEnterSelection: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
 }) {
   const poseCount = totalPoses(sequence);
   const today = new Date().toISOString().slice(0, 10);
@@ -115,6 +119,18 @@ function SequenceCard({
   const plannedDates = (sequence.dates ?? []).filter((e) => e.date > today).sort((a, b) => a.date.localeCompare(b.date));
   const nextPlanned = plannedDates[0]?.date;
   const lastTaught = [...taughtDates].sort((a, b) => b.date.localeCompare(a.date))[0]?.date;
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
 
   const handlers = useLongPress(
     onEnterSelection,
@@ -169,6 +185,44 @@ function SequenceCard({
             ) : null}
           </div>
         </div>
+        {!selectionMode && (
+          <div
+            ref={menuRef}
+            className="relative shrink-0"
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+              aria-label={`More actions for ${sequence.name}`}
+              aria-expanded={menuOpen}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
+                <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-9 z-20 w-36 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDuplicate(); setMenuOpen(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-700 transition hover:bg-stone-50"
+                >
+                  Duplicate
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDelete(); setMenuOpen(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );
@@ -284,6 +338,16 @@ export default function LibraryPage() {
     clearSelection();
   };
 
+  const handleDuplicateOne = useCallback((id: string) => {
+    const copy = duplicateSequence(id);
+    if (copy) setSequences((prev) => [copy, ...prev]);
+  }, []);
+
+  const handleDeleteOne = useCallback((id: string) => {
+    deleteSequence(id);
+    setSequences((prev) => prev.filter((s) => s.id !== id));
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#e8e3da] px-6 py-12 text-stone-800">
       <main className="mx-auto w-full max-w-2xl">
@@ -331,6 +395,8 @@ export default function LibraryPage() {
                   onOpen={() => router.push(`/sequence/${seq.id}`)}
                   onToggleSelect={() => toggleSelect(seq.id)}
                   onEnterSelection={() => enterSelection(seq.id)}
+                  onDuplicate={() => handleDuplicateOne(seq.id)}
+                  onDelete={() => handleDeleteOne(seq.id)}
                 />
               ))}
             </div>
