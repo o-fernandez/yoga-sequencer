@@ -6,7 +6,47 @@ export type PoseItem = {
   duration: string;
   minutes: number;
   cue?: string;
+  breaths?: number;
+  holdMode?: boolean;
 };
+
+// Breath pace zones from vinyasa research — rate is pose-type-aware:
+//   1–2 breaths, any        →  5s  (~12 bpm: sun sal, one movement per breath)
+//   3+ breaths, active      →  8s  (~8 bpm:  vigorous holds — Warrior, Plank…)
+//   3+ breaths, restorative → 12s  (~5 bpm:  deep holds, floor, closing)
+function secondsPerBreath(breaths: number, holdMode: boolean): number {
+  if (breaths <= 2) return 5;
+  return holdMode ? 12 : 8;
+}
+
+export function breathsToMinutes(breaths: number, holdMode: boolean): number {
+  return (breaths * secondsPerBreath(breaths, holdMode)) / 60;
+}
+
+export function formatBreathEstimate(breaths: number, holdMode: boolean): string {
+  const totalSecs = Math.round(breathsToMinutes(breaths, holdMode) * 60);
+  if (totalSecs < 60) return `~${totalSecs}s`;
+  const m = Math.floor(totalSecs / 60);
+  const s = totalSecs % 60;
+  return s === 0 ? `~${m}m` : `~${m}m ${s}s`;
+}
+
+export function normalizePoseItem(item: PoseItem): PoseItem {
+  const meta = getPoseMeta(item.pose);
+  const breaths = item.breaths ?? meta?.defaultBreaths ?? 5;
+  // holdMode is always re-derived from the pose library on normalize — never trust
+  // a stored value since it's computed, not user-set. Restorative poses (~5 bpm)
+  // breathe slower than active holds (~8 bpm).
+  const holdMode = meta?.defaultHoldMode ?? false;
+  const minutes = breathsToMinutes(breaths, holdMode);
+  return {
+    ...item,
+    breaths,
+    holdMode,
+    minutes,
+    duration: `${breaths} breath${breaths === 1 ? "" : "s"}`,
+  };
+}
 
 export type Section = {
   id: string;
@@ -37,29 +77,39 @@ export function generateId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
-/** Migrate a record from the old schema (taughtDates + intendedDate) to new (dates). */
+/** Migrate a record: handle old schema (taughtDates → dates) and normalize all pose items. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrate(raw: any): SequenceRecord {
-  if (Array.isArray(raw.dates)) return raw as SequenceRecord;
-  const merged = new Set<string>();
-  if (Array.isArray(raw.taughtDates)) raw.taughtDates.forEach((d: string) => merged.add(d));
-  if (typeof raw.intendedDate === "string" && raw.intendedDate) merged.add(raw.intendedDate);
-  const rest = { ...raw };
-  delete rest.taughtDates;
-  delete rest.intendedDate;
-  return { ...rest, dates: [...merged].sort() } as SequenceRecord;
+  let record: SequenceRecord;
+  if (Array.isArray(raw.dates)) {
+    record = raw as SequenceRecord;
+  } else {
+    const merged = new Set<string>();
+    if (Array.isArray(raw.taughtDates)) raw.taughtDates.forEach((d: string) => merged.add(d));
+    if (typeof raw.intendedDate === "string" && raw.intendedDate) merged.add(raw.intendedDate);
+    const rest = { ...raw };
+    delete rest.taughtDates;
+    delete rest.intendedDate;
+    record = { ...rest, dates: [...merged].sort() } as SequenceRecord;
+  }
+  return {
+    ...record,
+    sections: record.sections.map((section) => ({
+      ...section,
+      poses: section.poses.map(normalizePoseItem),
+    })),
+  };
 }
 
-/** Build a PoseItem, pulling duration/minutes from the pose library so seeds stay in sync. */
+/** Build a PoseItem for seed sequences with breaths defaults applied. */
 function p(id: string, pose: string, cue?: string): PoseItem {
-  const meta = getPoseMeta(pose);
-  return {
+  return normalizePoseItem({
     id,
     pose,
-    duration: meta?.duration ?? "1 min",
-    minutes: meta?.minutes ?? 1,
+    duration: "",
+    minutes: 0,
     ...(cue ? { cue } : {}),
-  };
+  });
 }
 
 const SEED_SEQUENCES: SequenceRecord[] = [
@@ -330,12 +380,13 @@ export function loadSequences(): SequenceRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_SEQUENCES));
-      return SEED_SEQUENCES;
+      const seeded = SEED_SEQUENCES.map(migrate);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+      return seeded;
     }
     const parsed = JSON.parse(raw);
     const migrated = parsed.map(migrate);
-    // Write back if migration changed anything
+    // Write back if migration changed anything (e.g. breaths normalization on first deploy)
     if (JSON.stringify(parsed) !== JSON.stringify(migrated)) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
     }

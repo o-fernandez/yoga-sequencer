@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { loadSequence, type SequenceRecord } from "@/lib/sequences";
+import { loadSequence, formatBreathEstimate, type SequenceRecord } from "@/lib/sequences";
 import { getBodyRegionClasses } from "@/lib/poses";
 import {
   buildTeachSteps,
@@ -62,6 +62,8 @@ function PoseRow({
   pose,
   sanskrit,
   duration,
+  breaths,
+  holdMode,
   cue,
   modifications,
   accentDot,
@@ -69,6 +71,8 @@ function PoseRow({
   pose: string;
   sanskrit?: string;
   duration: string;
+  breaths?: number;
+  holdMode?: boolean;
   cue?: string;
   modifications?: string[];
   accentDot?: string;
@@ -82,7 +86,7 @@ function PoseRow({
         />
       )}
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <h3 className="text-2xl font-medium leading-snug text-stone-900">
             {pose}
             {sanskrit && (
@@ -91,9 +95,20 @@ function PoseRow({
               </span>
             )}
           </h3>
-          <span className="shrink-0 text-base tabular-nums text-stone-500">
-            {duration}
-          </span>
+          {breaths !== undefined ? (
+            <div className="shrink-0 text-right">
+              <p className="text-base tabular-nums text-stone-700">
+                {breaths} breath{breaths === 1 ? "" : "s"}
+              </p>
+              <p className="text-sm tabular-nums text-stone-400">
+                {formatBreathEstimate(breaths, holdMode ?? false)}
+              </p>
+            </div>
+          ) : (
+            <span className="shrink-0 text-base tabular-nums text-stone-500">
+              {duration}
+            </span>
+          )}
         </div>
         {cue && (
           <p className="mt-2 text-lg leading-relaxed text-stone-600">{cue}</p>
@@ -137,6 +152,8 @@ function RunningOrder({ passes }: { passes: TeachPass[] }) {
                   pose={step.pose}
                   sanskrit={step.sanskrit}
                   duration={step.duration}
+                  breaths={step.breaths}
+                  holdMode={step.holdMode}
                   cue={step.cue}
                   modifications={step.modifications}
                   accentDot={accent}

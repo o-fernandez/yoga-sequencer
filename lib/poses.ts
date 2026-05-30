@@ -31,6 +31,8 @@ export type PoseMeta = {
   bodyRegion: BodyRegion;
   prerequisites?: BodyTarget[];
   modifications?: string[];
+  defaultBreaths?: number;
+  defaultHoldMode?: boolean;
 };
 
 export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
@@ -42,18 +44,21 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         duration: "2 min", minutes: 2,
         chakras: ["crown"], bodyTargets: [], poseType: "seated", energy: "grounding",
         bodyRegion: "rest",
+        defaultBreaths: 5, defaultHoldMode: true,
       },
       {
         pose: "Cat/Cow", sanskrit: "Marjaryasana/Bitilasana", aliases: ["cat cow", "cat-cow", "marjaryasana", "bitilasana", "cat", "cow"],
         duration: "2 min", minutes: 2,
         chakras: ["sacral", "solar"], bodyTargets: ["spine", "lower_back"], poseType: "prone", energy: "warming",
         bodyRegion: "full_body",
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Child's Pose", sanskrit: "Balasana", aliases: ["childs pose", "child pose", "balasana", "bala"],
         duration: "1 min", minutes: 1,
         chakras: ["root", "third_eye"], bodyTargets: ["hip_rotators", "lower_back"], poseType: "prone", energy: "grounding",
         bodyRegion: "rest",
+        defaultBreaths: 5, defaultHoldMode: true,
       },
       {
         pose: "Downward Dog", sanskrit: "Adho Mukha Svanasana", aliases: ["down dog", "downdog", "adho mukha", "adho mukha svanasana", "ado muka", "down facing dog"],
@@ -61,6 +66,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "third_eye"], bodyTargets: ["hamstrings", "calves", "shoulders", "upper_back"], poseType: "inversion", energy: "neutral",
         bodyRegion: "full_body",
         modifications: ["Bend knees generously to find length in the spine", "Pedal the heels alternately to warm the calves", "Puppy pose (forearms down) for tight shoulders"],
+        defaultBreaths: 3, defaultHoldMode: false,
       },
       {
         pose: "Beast", aliases: ["beast pose", "hovering table", "table top hover"],
@@ -68,6 +74,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["solar", "root"], bodyTargets: ["core", "wrists", "shoulders"], poseType: "prone", energy: "warming",
         bodyRegion: "core",
         modifications: ["Keep knees hovering just 1 inch off the floor", "Wrist discomfort: fists or forearm variation"],
+        defaultBreaths: 3, defaultHoldMode: false,
       },
     ],
   },
@@ -79,6 +86,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         duration: "30 sec", minutes: 0.5,
         chakras: ["root"], bodyTargets: [], poseType: "standing", energy: "grounding",
         bodyRegion: "full_body",
+        defaultBreaths: 1, defaultHoldMode: false,
       },
       {
         pose: "Extended Mountain", sanskrit: "Urdhva Hastasana", aliases: ["upward salute", "raised hands", "arms overhead", "mountain arms up", "urdhva hastasana", "hands up", "ext mountain"],
@@ -86,6 +94,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["crown", "root"], bodyTargets: ["shoulders", "spine"], poseType: "standing", energy: "warming",
         bodyRegion: "full_body",
         modifications: ["Hands shoulder-width if shoulders are tight", "Soft micro-bend in the knees", "Gaze forward instead of up"],
+        defaultBreaths: 1, defaultHoldMode: false,
       },
       {
         pose: "Standing Forward Fold", sanskrit: "Uttanasana", aliases: ["forward fold", "fwd fold", "forward bend", "uttanasana", "standing fold", "uttana"],
@@ -93,6 +102,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "sacral"], bodyTargets: ["hamstrings", "lower_back"], poseType: "forward_fold", energy: "cooling",
         bodyRegion: "lower_body",
         modifications: ["Bend knees deeply", "Hands to blocks"],
+        defaultBreaths: 1, defaultHoldMode: false,
       },
       {
         pose: "Half Lift", sanskrit: "Ardha Uttanasana", aliases: ["halfway lift", "half forward fold", "ardha uttanasana", "half way lift", "flat back"],
@@ -100,6 +110,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "solar"], bodyTargets: ["hamstrings", "core"], poseType: "forward_fold", energy: "warming",
         bodyRegion: "lower_body",
         modifications: ["Hands to shins or blocks", "Flat-back focus over hamstring length"],
+        defaultBreaths: 1, defaultHoldMode: false,
       },
       {
         pose: "Plank", sanskrit: "Phalakasana", aliases: ["plank pose", "phalakasana", "high plank"],
@@ -107,6 +118,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["solar"], bodyTargets: ["core", "shoulders", "wrists", "arms"], poseType: "prone", energy: "heating",
         bodyRegion: "core",
         modifications: ["Knees down", "Wrist discomfort: forearm plank"],
+        defaultBreaths: 1, defaultHoldMode: false,
       },
       {
         pose: "Chaturanga", sanskrit: "Chaturanga Dandasana", aliases: ["four-limbed staff", "low push-up", "chataranga", "chaturanga dandasana", "low plank", "chat"],
@@ -114,6 +126,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["solar", "heart"], bodyTargets: ["core", "shoulders", "chest", "arms", "wrists"], poseType: "prone", energy: "heating",
         bodyRegion: "upper_body",
         modifications: ["Lower all the way to belly", "Knees-down chaturanga", "Use a block under the chest"],
+        defaultBreaths: 1, defaultHoldMode: false,
       },
       {
         pose: "Upward Dog", sanskrit: "Urdhva Mukha Svanasana", aliases: ["updog", "up dog", "urdhva mukha", "urdhva mukha svanasana", "urdvha mukha", "upward facing dog"],
@@ -121,6 +134,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["heart"], bodyTargets: ["chest", "upper_back", "hip_flexors"], poseType: "backbend", energy: "heating",
         bodyRegion: "upper_body",
         modifications: ["Cobra (stay lower, thighs on floor)", "Roll over toes one foot at a time"],
+        defaultBreaths: 1, defaultHoldMode: false,
       },
     ],
   },
@@ -134,6 +148,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "solar"], bodyTargets: ["quads", "glutes", "core"], poseType: "standing", energy: "heating",
         bodyRegion: "lower_body",
         modifications: ["Less depth in the bend", "Arms to heart center if shoulders are tight"],
+        defaultBreaths: 1, defaultHoldMode: false,
       },
       {
         pose: "Warrior I", sanskrit: "Virabhadrasana I", aliases: ["warrior 1", "warrior one", "vira 1", "vira I", "virabhadrasana 1", "virabhadrasana I"],
@@ -141,6 +156,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "solar"], bodyTargets: ["hip_flexors", "quads", "glutes", "upper_back"], poseType: "standing", energy: "heating",
         bodyRegion: "lower_body",
         modifications: ["Shorten stance for tight hips", "Back heel lifted (crescent variation)"],
+        defaultBreaths: 1, defaultHoldMode: false,
       },
       {
         pose: "Vinyasa", aliases: ["flow", "vinyasa flow", "sun salutation flow"],
@@ -148,6 +164,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["solar", "heart"], bodyTargets: ["core", "shoulders", "chest"], poseType: "prone", energy: "heating",
         bodyRegion: "full_body",
         modifications: ["Skip to child's pose anytime", "Knees-down chaturanga"],
+        defaultBreaths: 1, defaultHoldMode: false,
       },
     ],
   },
@@ -167,6 +184,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["solar", "sacral"], bodyTargets: ["hip_flexors", "quads", "core"], poseType: "standing", energy: "heating",
         bodyRegion: "lower_body",
         modifications: ["Hands to hips to reduce upper body demand", "Shorten stance"],
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Twisted Crescent", sanskrit: "Parivrtta Anjaneyasana", aliases: ["twisted lunge", "revolved crescent", "revolved lunge", "parivrtta anjaneyasana", "low lunge twist"],
@@ -181,6 +199,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "solar"], bodyTargets: ["hamstrings", "glutes", "core"], poseType: "balancing", energy: "heating",
         bodyRegion: "lower_body",
         modifications: ["Hands to hips", "Fingertips to blocks", "Stand near a wall for balance"],
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Eagle", sanskrit: "Garudasana", aliases: ["garuda", "eagle pose", "garudasana"],
@@ -188,6 +207,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["third_eye", "sacral"], bodyTargets: ["hip_rotators", "shoulders", "upper_back"], poseType: "balancing", energy: "grounding",
         bodyRegion: "lower_body",
         modifications: ["Cross legs without wrapping (figure 4 shape)", "Eagle arms only (seated)"],
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Side Plank", sanskrit: "Vasisthasana", aliases: ["vasistha", "vasisthasana", "side plank pose"],
@@ -230,6 +250,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "heart"], bodyTargets: ["hip_rotators", "ankles", "core"], poseType: "balancing", energy: "grounding",
         bodyRegion: "lower_body",
         modifications: ["Toes to the floor, heel to the ankle (kickstand)", "Foot to the calf instead of the inner thigh", "Hand to a wall"],
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Standing Hand-to-Big-Toe", sanskrit: "Utthita Hasta Padangusthasana", aliases: ["hand to big toe", "extended hand to toe", "standing big toe pose", "utthita hasta padangusthasana", "uhp"],
@@ -248,6 +269,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         duration: "1 min", minutes: 1,
         chakras: ["sacral", "heart"], bodyTargets: ["hip_rotators", "chest"], poseType: "standing", energy: "warming",
         bodyRegion: "lower_body",
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Warrior II", sanskrit: "Virabhadrasana II", aliases: ["warrior 2", "warrior two", "vira II", "vira 2", "virabhadrasana 2", "virabhadrasana II"],
@@ -255,12 +277,14 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["sacral"], bodyTargets: ["hip_rotators", "quads"], poseType: "standing", energy: "heating",
         bodyRegion: "lower_body",
         modifications: ["Shorten stance", "Reduce depth of front knee bend"],
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Peaceful Warrior", sanskrit: "Shanti Virabhadrasana", aliases: ["reverse warrior", "peace warrior", "shanti vira", "reversed warrior"],
         duration: "45 sec", minutes: 0.75,
         chakras: ["sacral", "heart"], bodyTargets: ["hip_rotators", "chest"], poseType: "standing", energy: "warming",
         bodyRegion: "lower_body",
+        defaultBreaths: 3, defaultHoldMode: false,
       },
       {
         pose: "Triangle", sanskrit: "Utthita Trikonasana", aliases: ["trikonasana", "trikona", "extended triangle", "utthita trikonasana", "tri"],
@@ -268,6 +292,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["sacral", "heart"], bodyTargets: ["hamstrings", "hip_rotators", "chest"], poseType: "standing", energy: "neutral",
         bodyRegion: "lower_body",
         modifications: ["Block under bottom hand", "Bend front knee slightly"],
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Extended Side Angle", sanskrit: "Utthita Parsvakonasana", aliases: ["side angle", "parsvakonasana", "utthita parsvakonasana", "ext side angle"],
@@ -275,6 +300,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["sacral", "solar"], bodyTargets: ["hip_rotators", "core"], poseType: "standing", energy: "heating",
         bodyRegion: "lower_body",
         modifications: ["Forearm to thigh instead of hand to floor", "Block under bottom hand"],
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Half Moon", sanskrit: "Ardha Chandrasana", aliases: ["ardha chandra", "ardha chandrasana", "half moon pose"],
@@ -282,6 +308,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["sacral", "third_eye"], bodyTargets: ["hip_rotators", "hamstrings"], poseType: "balancing", energy: "heating",
         bodyRegion: "lower_body",
         modifications: ["Block under bottom hand", "Stand near a wall", "Keep top hand on hip"],
+        defaultBreaths: 5, defaultHoldMode: false,
       },
       {
         pose: "Revolved Triangle", sanskrit: "Parivrtta Trikonasana", aliases: ["revolved triangle", "twisted triangle", "parivrtta trikonasana", "parivrtta trikona"],
@@ -442,6 +469,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["sacral", "heart"], bodyTargets: ["hip_rotators", "chest"], poseType: "supine", energy: "cooling",
         bodyRegion: "rest",
         modifications: ["Bolster under knees", "Rolled blanket under each thigh"],
+        defaultBreaths: 10, defaultHoldMode: true,
       },
     ],
   },
@@ -455,6 +483,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         bodyRegion: "lower_body",
         prerequisites: ["hip_rotators"],
         modifications: ["Reclined pigeon (supta kapotasana) — identical benefit, zero knee strain", "Blanket under front hip", "Figure 4 on the back"],
+        defaultBreaths: 8, defaultHoldMode: true,
       },
       {
         pose: "Gomukhasana", sanskrit: "Gomukhasana", aliases: ["cow face pose", "cow face", "gomukha", "go mukha"],
@@ -462,6 +491,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["sacral", "heart"], bodyTargets: ["hip_rotators", "shoulders"], poseType: "seated", energy: "cooling",
         bodyRegion: "lower_body",
         modifications: ["Sit on a block", "Strap for the arm bind", "Keep bottom leg extended"],
+        defaultBreaths: 8, defaultHoldMode: true,
       },
       {
         pose: "Janu Sirsasana", sanskrit: "Janu Sirsasana", aliases: ["head to knee pose", "seated forward fold one leg", "janu sirsa", "janu"],
@@ -469,6 +499,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "sacral"], bodyTargets: ["hamstrings", "hip_rotators"], poseType: "forward_fold", energy: "cooling",
         bodyRegion: "lower_body",
         modifications: ["Strap around foot", "Sit on a folded blanket"],
+        defaultBreaths: 8, defaultHoldMode: true,
       },
       {
         pose: "Stargazer", aliases: ["stargazer pose", "star gazer"],
@@ -482,6 +513,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root"], bodyTargets: ["hamstrings", "lower_back"], poseType: "forward_fold", energy: "cooling",
         bodyRegion: "lower_body",
         modifications: ["Strap around feet", "Sit on a block or blanket", "Generous bend in knees"],
+        defaultBreaths: 8, defaultHoldMode: true,
       },
       {
         pose: "Supine Twist", sanskrit: "Supta Matsyendrasana", aliases: ["spinal twist", "reclining twist", "lying twist", "supta matsyendrasana", "jathara parivartanasana"],
@@ -489,6 +521,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["solar"], bodyTargets: ["spine", "lower_back"], poseType: "twist", energy: "cooling",
         bodyRegion: "rest",
         modifications: ["Blanket between knees", "Keep both shoulders grounded — reduce the twist depth"],
+        defaultBreaths: 10, defaultHoldMode: true,
       },
       {
         pose: "Happy Baby", sanskrit: "Ananda Balasana", aliases: ["happy baby pose", "ananda bala", "ananda balasana", "dead bug"],
@@ -496,6 +529,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "sacral"], bodyTargets: ["hip_rotators", "lower_back"], poseType: "supine", energy: "cooling",
         bodyRegion: "rest",
         modifications: ["Strap around feet", "Hold one leg at a time"],
+        defaultBreaths: 10, defaultHoldMode: true,
       },
       {
         pose: "Seated Twist", sanskrit: "Ardha Matsyendrasana", aliases: ["seated twist", "half lord of the fishes", "seated spinal twist", "ardha matsyendrasana", "matsyendrasana"],
@@ -531,6 +565,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["root", "crown"], bodyTargets: ["lower_back"], poseType: "inversion", energy: "cooling",
         bodyRegion: "rest",
         modifications: ["Bolster under the hips", "Away from the wall with knees bent", "Strap around the thighs"],
+        defaultBreaths: 10, defaultHoldMode: true,
       },
       {
         pose: "Savasana", sanskrit: "Savasana", aliases: ["corpse pose", "final relaxation", "sava", "shavasana", "final rest"],
@@ -538,6 +573,7 @@ export const poseLibrary: { category: string; poses: PoseMeta[] }[] = [
         chakras: ["crown"], bodyTargets: [], poseType: "supine", energy: "cooling",
         bodyRegion: "rest",
         modifications: ["Bolster under knees", "Eye pillow", "Blanket for warmth"],
+        defaultBreaths: 15, defaultHoldMode: true,
       },
     ],
   },

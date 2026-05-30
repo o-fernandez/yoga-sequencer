@@ -14,6 +14,8 @@ export type TeachStep = {
   sanskrit?: string;
   duration: string;
   minutes: number;
+  breaths?: number;
+  holdMode?: boolean;
   cue?: string;
   modifications?: string[];
   bodyRegion?: BodyRegion;
@@ -46,6 +48,8 @@ function stepsForSide(
       sanskrit: meta?.sanskrit,
       duration: p.duration,
       minutes: p.minutes,
+      breaths: p.breaths,
+      holdMode: p.holdMode,
       cue: p.cue,
       modifications: meta?.modifications,
       bodyRegion: meta?.bodyRegion,

@@ -25,6 +25,8 @@ import {
   generateId,
   loadSequence,
   saveSequence,
+  normalizePoseItem,
+  formatBreathEstimate,
   type PoseItem,
   type Section,
 } from "@/lib/sequences";
@@ -146,6 +148,41 @@ function PoseCueField({
     >
       Add cue
     </button>
+  );
+}
+
+function BreathsControl({
+  breaths,
+  holdMode,
+  onChange,
+}: {
+  breaths: number;
+  holdMode: boolean;
+  onChange: (breaths: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onChange(Math.max(1, breaths - 1)); }}
+        aria-label="Fewer breaths"
+        className="flex h-6 w-6 items-center justify-center rounded text-stone-400 hover:bg-stone-200/60 hover:text-stone-600"
+      >
+        <span className="text-sm leading-none select-none">−</span>
+      </button>
+      <span className="min-w-[1.75ch] text-center text-xs tabular-nums text-stone-700">{breaths}</span>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onChange(breaths + 1); }}
+        aria-label="More breaths"
+        className="flex h-6 w-6 items-center justify-center rounded text-stone-400 hover:bg-stone-200/60 hover:text-stone-600"
+      >
+        <span className="text-sm leading-none select-none">+</span>
+      </button>
+      <span className="text-[10px] tabular-nums text-stone-400">
+        {formatBreathEstimate(breaths, holdMode)}
+      </span>
+    </div>
   );
 }
 
@@ -403,6 +440,7 @@ function SectionPoseRow({
   onMove,
   onRemove,
   onUpdateCue,
+  onUpdateBreaths,
   onAddPrep,
 }: {
   pose: PoseItem;
@@ -414,6 +452,7 @@ function SectionPoseRow({
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
   onUpdateCue: (poseId: string, cue: string) => void;
+  onUpdateBreaths: (poseId: string, breaths: number) => void;
   onAddPrep: (poseName: string) => void;
 }) {
   const [showWarning, setShowWarning] = useState(false);
@@ -520,9 +559,13 @@ function SectionPoseRow({
           </div>
         </div>
 
-        {/* Right rail: duration + move/remove controls */}
+        {/* Right rail: breaths control + move/remove controls */}
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <p className="text-xs text-stone-500">{pose.duration}</p>
+          <BreathsControl
+            breaths={pose.breaths ?? 5}
+            holdMode={pose.holdMode ?? false}
+            onChange={(b) => onUpdateBreaths(pose.id, b)}
+          />
           <div className="flex items-center gap-0.5">
             <button
               type="button"
@@ -592,6 +635,7 @@ function SortableSectionBlock({
   onUpdateTitle,
   onToggleSecondSide,
   onUpdateCue,
+  onUpdateBreaths,
   onAddPose,
   onAddPrep,
   onMovePose,
@@ -608,6 +652,7 @@ function SortableSectionBlock({
   onUpdateTitle: (id: string, title: string) => void;
   onToggleSecondSide: (id: string) => void;
   onUpdateCue: (poseId: string, cue: string) => void;
+  onUpdateBreaths: (poseId: string, breaths: number) => void;
   onAddPose: (id: string) => void;
   onAddPrep: (poseName: string) => void;
   onMovePose: (sectionId: string, poseId: string, dir: -1 | 1) => void;
@@ -758,6 +803,7 @@ function SortableSectionBlock({
                   onMove={(dir) => onMovePose(section.id, pose.id, dir)}
                   onRemove={() => onRemovePose(section.id, pose.id)}
                   onUpdateCue={onUpdateCue}
+                  onUpdateBreaths={onUpdateBreaths}
                   onAddPrep={onAddPrep}
                 />
               ))}
@@ -1468,12 +1514,7 @@ export default function BuilderPage() {
   };
 
   const handleAddPose = (sectionId: string, option: PoseOption) => {
-    const newPose: PoseItem = {
-      id: generateId(),
-      pose: option.pose,
-      duration: option.duration,
-      minutes: option.minutes,
-    };
+    const newPose = normalizePoseItem({ id: generateId(), pose: option.pose, duration: "", minutes: 0 });
     updateSections((prev) =>
       prev.map((s) => (s.id === sectionId ? { ...s, poses: [...s.poses, newPose] } : s)),
     );
@@ -1481,16 +1522,22 @@ export default function BuilderPage() {
   };
 
   const handleAddPoses = (sectionId: string, poses: PoseMeta[]) => {
-    const newPoses: PoseItem[] = poses.map((p) => ({
-      id: generateId(),
-      pose: p.pose,
-      duration: p.duration,
-      minutes: p.minutes,
-    }));
+    const newPoses = poses.map((p) => normalizePoseItem({ id: generateId(), pose: p.pose, duration: "", minutes: 0 }));
     updateSections((prev) =>
       prev.map((s) => (s.id === sectionId ? { ...s, poses: [...s.poses, ...newPoses] } : s)),
     );
     setAddPoseSectionId(null);
+  };
+
+  const updatePoseBreaths = (poseId: string, breaths: number) => {
+    updateSections((prev) =>
+      prev.map((s) => ({
+        ...s,
+        poses: s.poses.map((p) =>
+          p.id === poseId ? normalizePoseItem({ ...p, breaths }) : p
+        ),
+      })),
+    );
   };
 
   const updateSectionTitle = (sectionId: string, title: string) => {
@@ -1565,15 +1612,8 @@ export default function BuilderPage() {
     updateSections((prev) => insertPoseBeforePeak(prev, poseName, peakPose));
   };
 
-  const makePoseItem = (poseName: string): PoseItem => {
-    const meta = getPoseMeta(poseName);
-    return {
-      id: generateId(),
-      pose: poseName,
-      duration: meta?.duration ?? "1 min",
-      minutes: meta?.minutes ?? 1,
-    };
-  };
+  const makePoseItem = (poseName: string): PoseItem =>
+    normalizePoseItem({ id: generateId(), pose: poseName, duration: "", minutes: 0 });
 
   const handleAuditAction = (action: AuditAction) => {
     if (action.kind === "mark_both_sides") {
@@ -1780,6 +1820,7 @@ export default function BuilderPage() {
                     onUpdateTitle={updateSectionTitle}
                     onToggleSecondSide={toggleSecondSide}
                     onUpdateCue={updatePoseCue}
+                    onUpdateBreaths={updatePoseBreaths}
                     onAddPose={setAddPoseSectionId}
                     onAddPrep={handleAddPrep}
                     onMovePose={movePose}
@@ -1806,6 +1847,9 @@ export default function BuilderPage() {
           <div className="rounded-2xl bg-white/80 px-5 py-4 text-sm text-stone-600 ring-1 ring-stone-200/70">
             <p className="text-stone-600">
               About <span className="font-display text-base text-stone-800">{formatMinutes(totalMinutes)}</span> on the mat
+            </p>
+            <p className="mt-1 text-xs text-stone-400">
+              ~5s per breath in flows, ~8s in holds, ~12s in deep holds
             </p>
           </div>
         </footer>
