@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -9,7 +9,6 @@ import {
   MouseSensor,
   TouchSensor,
   closestCenter,
-  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -61,8 +60,6 @@ type PoseOption = { pose: string; duration: string; minutes: number };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const TRASH_ID = "trash";
-
 function formatMinutes(minutes: number) {
   const whole = Math.floor(minutes);
   const secs = Math.round((minutes - whole) * 60);
@@ -76,21 +73,6 @@ function formatDateShort(iso: string): string {
   const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
   if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
   return d.toLocaleDateString("en-US", opts);
-}
-
-function poseSortableId(sectionId: string, poseId: string) {
-  return `${sectionId}::${poseId}`;
-}
-
-function sectionDropId(sectionId: string) {
-  return `section-drop-${sectionId}`;
-}
-
-function parsePoseSortableId(id: string | number) {
-  const value = String(id);
-  if (!value.includes("::")) return null;
-  const [sectionId, poseId] = value.split("::");
-  return { sectionId, poseId };
 }
 
 function isSectionSortableId(id: string | number, sections: Section[]) {
@@ -183,10 +165,10 @@ function getDominantEnergy(section: Section): EnergyQuality | null {
 }
 
 const ENERGY_ARC_CLASSES: Record<EnergyQuality, string> = {
-  heating:  "bg-orange-400",
-  warming:  "bg-amber-400",
-  cooling:  "bg-sky-400",
-  grounding:"bg-slate-400",
+  heating:  "bg-orange-300",
+  warming:  "bg-amber-300",
+  cooling:  "bg-sky-300",
+  grounding:"bg-stone-400",
   neutral:  "bg-stone-300",
 };
 
@@ -214,8 +196,8 @@ function EnergyArc({ sections }: { sections: Section[] }) {
 
   return (
     <div className="mb-5">
-      <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.16em] text-stone-400">
-        Energy arc
+      <p className="mb-2 font-display text-sm italic text-stone-400">
+        The arc of the class
       </p>
       <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full">
         {blocks.map((block) => (
@@ -242,71 +224,52 @@ function EnergyArc({ sections }: { sections: Section[] }) {
   );
 }
 
-// ─── Peak readiness panel ─────────────────────────────────────────────────────
+// ─── Peak readiness (shown on the peak pose card) ─────────────────────────────
 
-function PeakReadinessPanel({
+/**
+ * Calm, in-context readiness shown on the peak pose's own card: an affirmation
+ * when the body is warmed, or a gentle note of what's still waking up with prep
+ * ideas tucked behind a tap. Replaces the old standalone top panel.
+ */
+function PeakReadinessNote({
   readiness,
   onAddPrep,
 }: {
   readiness: PeakReadiness;
   onAddPrep: (poseName: string) => void;
 }) {
-  const { peak, depends, warmed, unwarmed, suggestionsByArea } = readiness;
-  const allWarmed = unwarmed.length === 0;
+  const { unwarmed, suggestionsByArea } = readiness;
+  const [showPrep, setShowPrep] = useState(false);
+
+  if (unwarmed.length === 0) {
+    return (
+      <p className="mt-2.5 font-display text-sm italic text-stone-500">
+        The body is ready for this.
+      </p>
+    );
+  }
 
   return (
-    <div className="mb-5 rounded-2xl border border-stone-200 bg-white/80 p-4 ring-1 ring-stone-200/60">
-      <div className="mb-2.5 flex items-center justify-between gap-3">
-        <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-stone-400">
-          Peak readiness
-        </p>
-        <p className="text-xs font-medium text-stone-500">
-          {warmed.length} / {depends.length} warmed
-        </p>
-      </div>
+    <div className="mt-2.5">
+      <p className="text-xs text-stone-500">
+        Still waking up:{" "}
+        <span className="text-stone-700">
+          {unwarmed.map((a) => getBodyTargetLabel(a)).join(", ")}
+        </span>
+      </p>
+      <button
+        type="button"
+        onClick={() => setShowPrep((v) => !v)}
+        className="mt-1 text-[11px] text-stone-400 transition hover:text-stone-600"
+      >
+        {showPrep ? "Hide prep ideas" : "Prep ideas →"}
+      </button>
 
-      {/* Area chips */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {depends.map((area) => {
-          const isWarmed = warmed.includes(area);
-          return (
-            <span
-              key={area}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                isWarmed
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-amber-100 text-amber-700"
-              }`}
-            >
-              <span aria-hidden className="text-[10px] leading-none">
-                {isWarmed ? "✓" : "!"}
-              </span>
-              {getBodyTargetLabel(area)}
-            </span>
-          );
-        })}
-      </div>
-
-      {/* Verdict */}
-      {allWarmed ? (
-        <p className="text-sm text-emerald-700">
-          <span aria-hidden>✓ </span>Your class warms up for {peak}.
-        </p>
-      ) : (
-        <p className="text-sm text-stone-600">
-          Warm these before {peak}:{" "}
-          <span className="font-medium text-amber-700">
-            {unwarmed.map((a) => getBodyTargetLabel(a)).join(", ")}
-          </span>
-        </p>
-      )}
-
-      {/* Suggestions per unwarmed area */}
-      {!allWarmed && (
-        <div className="mt-3 space-y-2.5 border-t border-stone-200/80 pt-3">
+      {showPrep && (
+        <div className="mt-2 space-y-2.5 border-t border-amber-200/40 pt-2.5">
           {suggestionsByArea.map(({ area, poses }) => (
             <div key={area}>
-              <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-stone-400">
+              <p className="mb-1 text-[11px] text-stone-400">
                 Warm {getBodyTargetLabel(area)}
               </p>
               {poses.length === 0 ? (
@@ -318,7 +281,7 @@ function PeakReadinessPanel({
                       key={pose}
                       type="button"
                       onClick={() => onAddPrep(pose)}
-                      className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[11px] text-stone-600 transition hover:border-stone-300 hover:bg-[#e8e3da]/70 hover:text-stone-800"
+                      className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white/70 px-2.5 py-1 text-[11px] text-stone-600 transition hover:border-stone-300 hover:bg-white hover:text-stone-800"
                     >
                       <span aria-hidden className="text-stone-400">+</span>
                       {pose}
@@ -343,28 +306,28 @@ const AUDIT_SEVERITY_STYLES: Record<AuditSeverity, {
   text: string;
 }> = {
   critical: {
-    dot: "bg-red-500",
-    label: "Fix",
-    panel: "border-red-200 bg-red-50/70",
-    text: "text-red-700",
+    dot: "bg-rose-400/70",
+    label: "worth a look",
+    panel: "border-rose-200/50 bg-rose-50/40",
+    text: "text-rose-700/80",
   },
   warning: {
-    dot: "bg-amber-500",
-    label: "Tighten",
-    panel: "border-amber-200 bg-amber-50/70",
-    text: "text-amber-700",
+    dot: "bg-amber-400/70",
+    label: "consider",
+    panel: "border-amber-200/50 bg-amber-50/40",
+    text: "text-amber-700/80",
   },
   note: {
-    dot: "bg-sky-500",
-    label: "Note",
-    panel: "border-sky-200 bg-sky-50/70",
-    text: "text-sky-700",
+    dot: "bg-stone-400/70",
+    label: "note",
+    panel: "border-stone-200/70 bg-stone-50/60",
+    text: "text-stone-500",
   },
   good: {
-    dot: "bg-emerald-500",
-    label: "Good",
-    panel: "border-emerald-200 bg-emerald-50/70",
-    text: "text-emerald-700",
+    dot: "bg-emerald-400/60",
+    label: "nice",
+    panel: "border-emerald-200/50 bg-emerald-50/40",
+    text: "text-emerald-700/80",
   },
 };
 
@@ -377,30 +340,21 @@ function SequenceAuditPanel({
 }) {
   return (
     <section className="mb-5 rounded-2xl border border-stone-200 bg-white/80 p-4 ring-1 ring-stone-200/60">
-      <div className="mb-3 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-stone-400">
-            Sequence audit
-          </p>
-          <p className="mt-1 text-sm font-medium text-stone-800">{report.summary}</p>
-        </div>
-        <div className="rounded-full bg-stone-900 px-3 py-1 text-xs font-medium tabular-nums text-white">
-          {report.score}
-        </div>
+      <div className="mb-3 flex items-baseline justify-between gap-4">
+        <p className="font-display text-lg text-stone-700">Reading the flow</p>
+        <p className="text-xs text-stone-400">
+          {report.summary}
+          <span className="ml-2 tabular-nums text-stone-300">{report.score}/100</span>
+        </p>
       </div>
 
-      <div className="mb-3 grid grid-cols-3 gap-2">
-        {[
-          ["Total", report.totalMinutes],
-          ["Standing", report.standingMinutes],
-          ["Wind-down", report.windDownMinutes],
-        ].map(([label, minutes]) => (
-          <div key={label} className="rounded-xl bg-stone-100/80 px-3 py-2">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-stone-400">{label}</p>
-            <p className="mt-0.5 text-sm font-medium text-stone-700">{formatMinutes(minutes as number)}</p>
-          </div>
-        ))}
-      </div>
+      <p className="mb-3 text-xs text-stone-400">
+        {formatMinutes(report.totalMinutes)} total
+        <span className="text-stone-300"> · </span>
+        {formatMinutes(report.standingMinutes)} standing
+        <span className="text-stone-300"> · </span>
+        {formatMinutes(report.windDownMinutes)} wind-down
+      </p>
 
       <div className="space-y-2">
         {report.issues.map((issue) => {
@@ -415,8 +369,8 @@ function SequenceAuditPanel({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <p className="text-sm font-medium text-stone-800">{issue.title}</p>
-                    <span className={`text-[10px] font-medium uppercase tracking-[0.12em] ${styles.text}`}>
-                      {styles.label} · {issue.category}
+                    <span className={`text-[11px] italic ${styles.text}`}>
+                      {styles.label} · {issue.category.toLowerCase()}
                     </span>
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-stone-600">{issue.detail}</p>
@@ -439,71 +393,43 @@ function SequenceAuditPanel({
   );
 }
 
-function TrashDropZone() {
-  const { setNodeRef, isOver } = useDroppable({ id: TRASH_ID });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`fixed bottom-8 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border px-5 py-3 shadow-lg transition ${
-        isOver
-          ? "scale-105 border-red-300 bg-red-50 text-red-700"
-          : "border-stone-300 bg-white/95 text-stone-600"
-      }`}
-    >
-      <span aria-hidden className="text-base">🗑</span>
-      <span className="text-sm font-medium">Drop to delete</span>
-    </div>
-  );
-}
-
-function SectionPoseDropArea({
-  sectionId,
-  isEmpty,
-  children,
-}: {
-  sectionId: string;
-  isEmpty: boolean;
-  children: ReactNode;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: sectionDropId(sectionId) });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`min-h-[2rem] rounded-xl transition ${
-        isOver ? "bg-[#e8e3da]/80 ring-1 ring-stone-300" : ""
-      } ${isEmpty ? "border border-dashed border-stone-200 px-3 py-4" : ""}`}
-    >
-      {isEmpty ? (
-        <p className="text-center text-xs text-stone-400">Drop poses here</p>
-      ) : (
-        children
-      )}
-    </div>
-  );
-}
-
-function SortableSectionPoseRow({
-  sectionId,
+function SectionPoseRow({
   pose,
   missingPrereqs,
+  isPeak,
+  peakReadiness,
+  canMoveUp,
+  canMoveDown,
+  onMove,
+  onRemove,
   onUpdateCue,
+  onAddPrep,
 }: {
-  sectionId: string;
   pose: PoseItem;
   missingPrereqs: string[];
+  isPeak: boolean;
+  peakReadiness: PeakReadiness | null;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMove: (dir: -1 | 1) => void;
+  onRemove: () => void;
   onUpdateCue: (poseId: string, cue: string) => void;
+  onAddPrep: (poseName: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: poseSortableId(sectionId, pose.id),
-  });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
-
   const [showWarning, setShowWarning] = useState(false);
   const [showMods, setShowMods] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
   const meta = getPoseMeta(pose.pose);
   const regionClasses = meta?.bodyRegion ? getBodyRegionClasses(meta.bodyRegion) : null;
   const bodyChips = meta?.bodyTargets.slice(0, 3) ?? [];
@@ -511,25 +437,23 @@ function SortableSectionPoseRow({
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      className={`rounded-xl border border-stone-200 px-4 py-3 ${
-        regionClasses ? regionClasses.gradient : "bg-white"
-      }`}
+      className={
+        isPeak
+          ? "rounded-xl border border-amber-300/60 bg-amber-50/50 px-4 py-3 shadow-[0_1px_4px_rgba(180,140,80,0.12)] ring-1 ring-amber-200/60"
+          : `rounded-xl border border-stone-200 px-4 py-3 ${
+              regionClasses ? regionClasses.gradient : "bg-white"
+            }`
+      }
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              {...attributes}
-              {...listeners}
-              className="touch-none select-none cursor-grab text-stone-400 active:cursor-grabbing"
-              aria-label={`Drag ${pose.pose}`}
-            >
-              :::
-            </button>
+          <div className="flex items-center gap-2">
             <div className="flex min-w-0 items-baseline gap-2">
+              {isPeak && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                  <span aria-hidden>△</span> Peak
+                </span>
+              )}
               <p className="text-sm text-stone-800">{pose.pose}</p>
               {meta?.sanskrit && (
                 <span className="truncate text-[11px] italic text-stone-400">{meta.sanskrit}</span>
@@ -540,14 +464,14 @@ function SortableSectionPoseRow({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setShowWarning((v) => !v); }}
-                  className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-600 transition hover:bg-amber-200"
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100/70 text-amber-500 transition hover:bg-amber-100"
                   aria-label="Prerequisite warning"
                 >
                   <span className="text-[11px] font-bold leading-none">!</span>
                 </button>
                 {showWarning && (
                   <div className="absolute left-0 top-7 z-10 w-52 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 shadow-md">
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+                    <p className="mb-1 text-[11px] font-medium text-amber-700">
                       Not yet warmed up
                     </p>
                     <p className="text-xs text-amber-800">
@@ -559,7 +483,7 @@ function SortableSectionPoseRow({
             )}
           </div>
           {bodyChips.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1 pl-8">
+            <div className="mt-1.5 flex flex-wrap gap-1">
               {bodyChips.map((t) => (
                 <span
                   key={t}
@@ -570,7 +494,7 @@ function SortableSectionPoseRow({
               ))}
             </div>
           )}
-          <div className="pl-8">
+          <div>
             <PoseCueField cue={pose.cue} compact onSave={(cue) => onUpdateCue(pose.id, cue)} />
             {hasMods && (
               <div className="mt-1.5">
@@ -590,9 +514,67 @@ function SortableSectionPoseRow({
                 )}
               </div>
             )}
+            {isPeak && peakReadiness && (
+              <PeakReadinessNote readiness={peakReadiness} onAddPrep={onAddPrep} />
+            )}
           </div>
         </div>
-        <p className="shrink-0 text-xs text-stone-500">{pose.duration}</p>
+
+        {/* Right rail: duration + move/remove controls */}
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <p className="text-xs text-stone-500">{pose.duration}</p>
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => onMove(-1)}
+              disabled={!canMoveUp}
+              aria-label={`Move ${pose.pose} up`}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600 disabled:pointer-events-none disabled:opacity-25"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                <path fillRule="evenodd" d="M8 3.5a.75.75 0 0 1 .53.22l4 4a.75.75 0 0 1-1.06 1.06L8 5.31 4.53 8.78a.75.75 0 0 1-1.06-1.06l4-4A.75.75 0 0 1 8 3.5Z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => onMove(1)}
+              disabled={!canMoveDown}
+              aria-label={`Move ${pose.pose} down`}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600 disabled:pointer-events-none disabled:opacity-25"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                <path fillRule="evenodd" d="M8 12.5a.75.75 0 0 1-.53-.22l-4-4a.75.75 0 0 1 1.06-1.06L8 10.69l3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-.53.22Z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <div ref={menuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label={`More actions for ${pose.pose}`}
+                aria-expanded={menuOpen}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
+                  <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
+                </svg>
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-8 z-20 w-36 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => { onRemove(); setMenuOpen(false); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                      <path fillRule="evenodd" d="M6.5 1.75a.25.25 0 0 1 .25-.25h2.5a.25.25 0 0 1 .25.25V3h-3V1.75ZM11 3V1.75A1.75 1.75 0 0 0 9.25 0h-2.5A1.75 1.75 0 0 0 5 1.75V3H2.5a.75.75 0 0 0 0 1.5h.75v8.75A1.75 1.75 0 0 0 5 15h6a1.75 1.75 0 0 0 1.75-1.75V4.5h.75a.75.75 0 0 0 0-1.5H11ZM6.75 6.5a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 1.5 0v-5Zm4 0a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 1.5 0v-5Z" clipRule="evenodd" />
+                    </svg>
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -602,20 +584,34 @@ function SortableSectionBlock({
   section,
   isCollapsed,
   missingPrereqsMap,
+  peakPoseId,
+  peakReadiness,
+  firstPoseId,
+  lastPoseId,
   onToggleCollapse,
   onUpdateTitle,
   onToggleSecondSide,
   onUpdateCue,
   onAddPose,
+  onAddPrep,
+  onMovePose,
+  onRemovePose,
 }: {
   section: Section;
   isCollapsed: boolean;
   missingPrereqsMap: Map<string, string[]>;
+  peakPoseId: string | null;
+  peakReadiness: PeakReadiness | null;
+  firstPoseId: string | null;
+  lastPoseId: string | null;
   onToggleCollapse: (id: string) => void;
   onUpdateTitle: (id: string, title: string) => void;
   onToggleSecondSide: (id: string) => void;
   onUpdateCue: (poseId: string, cue: string) => void;
   onAddPose: (id: string) => void;
+  onAddPrep: (poseName: string) => void;
+  onMovePose: (sectionId: string, poseId: string, dir: -1 | 1) => void;
+  onRemovePose: (sectionId: string, poseId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: section.id });
   const [editingTitle, setEditingTitle] = useState(false);
@@ -628,7 +624,6 @@ function SortableSectionBlock({
   const sectionMinutes = section.poses.reduce((sum, p) => sum + p.minutes, 0);
   const totalSectionMinutes = section.secondSide ? sectionMinutes * 2 : sectionMinutes;
   const isCompact = section.poses.length === 1;
-  const poseSortableIds = section.poses.map((p) => poseSortableId(section.id, p.id));
 
   // Phase 3: section-level energy + body target aggregates
   const sectionMetas = section.poses.map((p) => getPoseMeta(p.pose)).filter(Boolean);
@@ -650,10 +645,10 @@ function SortableSectionBlock({
     return entries.sort((a, b) => b[1] - a[1])[0][0];
   })();
   const energyStyles: Record<string, string> = {
-    heating:  "bg-orange-100 text-orange-700",
-    warming:  "bg-amber-100 text-amber-700",
-    cooling:  "bg-sky-100 text-sky-700",
-    grounding:"bg-stone-200 text-stone-600",
+    heating:  "bg-orange-100/60 text-orange-700/80",
+    warming:  "bg-amber-100/60 text-amber-700/80",
+    cooling:  "bg-sky-100/60 text-sky-700/80",
+    grounding:"bg-stone-200/70 text-stone-600",
     neutral:  "bg-stone-100 text-stone-500",
   };
 
@@ -689,7 +684,7 @@ function SortableSectionBlock({
               type="button"
               {...attributes}
               {...listeners}
-              className="cursor-grab text-stone-400 active:cursor-grabbing"
+              className="touch-none select-none cursor-grab text-stone-400 active:cursor-grabbing"
               aria-label={`Drag section ${section.title}`}
             >
               :::
@@ -705,13 +700,13 @@ function SortableSectionBlock({
                   if (e.key === "Escape") setEditingTitle(false);
                 }}
                 autoFocus
-                className="min-w-0 flex-1 bg-transparent text-sm font-medium uppercase tracking-[0.14em] text-stone-700 focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent font-display text-base text-stone-700 focus:outline-none"
               />
             ) : (
               <button
                 type="button"
                 onClick={startEditingTitle}
-                className="truncate text-left text-sm font-medium uppercase tracking-[0.14em] text-stone-600 hover:text-stone-800"
+                className="truncate text-left font-display text-base text-stone-600 hover:text-stone-800"
               >
                 {section.title}
               </button>
@@ -747,29 +742,31 @@ function SortableSectionBlock({
         )}
       </div>
 
-      {isCollapsed ? (
-        <SectionPoseDropArea sectionId={section.id} isEmpty={section.poses.length === 0}>
-          {null}
-        </SectionPoseDropArea>
-      ) : (
+      {isCollapsed ? null : (
         <>
-          <SectionPoseDropArea sectionId={section.id} isEmpty={section.poses.length === 0}>
-            {section.poses.length > 0 && (
-              <SortableContext items={poseSortableIds} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
-                  {section.poses.map((pose) => (
-                    <SortableSectionPoseRow
-                      key={pose.id}
-                      sectionId={section.id}
-                      pose={pose}
-                      missingPrereqs={missingPrereqsMap.get(pose.id) ?? []}
-                      onUpdateCue={onUpdateCue}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            )}
-          </SectionPoseDropArea>
+          {section.poses.length > 0 ? (
+            <div className="space-y-2">
+              {section.poses.map((pose) => (
+                <SectionPoseRow
+                  key={pose.id}
+                  pose={pose}
+                  missingPrereqs={missingPrereqsMap.get(pose.id) ?? []}
+                  isPeak={pose.id === peakPoseId}
+                  peakReadiness={peakReadiness}
+                  canMoveUp={pose.id !== firstPoseId}
+                  canMoveDown={pose.id !== lastPoseId}
+                  onMove={(dir) => onMovePose(section.id, pose.id, dir)}
+                  onRemove={() => onRemovePose(section.id, pose.id)}
+                  onUpdateCue={onUpdateCue}
+                  onAddPrep={onAddPrep}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-stone-200 px-3 py-4 text-center text-xs text-stone-400">
+              No poses yet
+            </p>
+          )}
 
           <div className="mt-3 flex items-center justify-between gap-3 border-t border-stone-200/80 pt-3">
             <button
@@ -1214,7 +1211,7 @@ function TeachingDatesField({
 
   return (
     <div className="col-span-2">
-      <label className="mb-2 block text-xs font-medium uppercase tracking-[0.12em] text-stone-400">
+      <label className="mb-2 block text-xs text-stone-400">
         Teaching dates
       </label>
 
@@ -1313,7 +1310,6 @@ export default function BuilderPage() {
   // Builder state
   const [sections, setSections] = useState<Section[]>([]);
   const [addPoseSectionId, setAddPoseSectionId] = useState<string | null>(null);
-  const [draggingPoseLabel, setDraggingPoseLabel] = useState<string | null>(null);
   const [draggingSectionTitle, setDraggingSectionTitle] = useState<string | null>(null);
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
 
@@ -1403,100 +1399,16 @@ export default function BuilderPage() {
   };
 
   const handleDragStart = (event: DragStartEvent) => {
-    const activePose = parsePoseSortableId(event.active.id);
-    if (activePose) {
-      setDraggingSectionTitle(null);
-      const section = sections.find((s) => s.id === activePose.sectionId);
-      setDraggingPoseLabel(section?.poses.find((p) => p.id === activePose.poseId)?.pose ?? null);
-      return;
-    }
     if (isSectionSortableId(event.active.id, sections)) {
-      setDraggingPoseLabel(null);
       setDraggingSectionTitle(sections.find((s) => s.id === event.active.id)?.title ?? "Section");
     }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    setDraggingPoseLabel(null);
     setDraggingSectionTitle(null);
-    if (!over) return;
-
-    const activePose = parsePoseSortableId(active.id);
-
-    if (activePose) {
-      if (over.id === TRASH_ID) {
-        updateSections((prev) =>
-          prev.map((s) =>
-            s.id === activePose.sectionId
-              ? { ...s, poses: s.poses.filter((p) => p.id !== activePose.poseId) }
-              : s,
-          ),
-        );
-        return;
-      }
-
-      let poseDropTargetSectionId: string | null = null;
-
-      updateSections((current) => {
-        let targetSectionId: string;
-        let targetIndex: number;
-
-        if (String(over.id).startsWith("section-drop-")) {
-          targetSectionId = String(over.id).replace("section-drop-", "");
-          const targetSection = current.find((s) => s.id === targetSectionId);
-          if (!targetSection) return current;
-          targetIndex = targetSection.poses.length;
-        } else if (isSectionSortableId(over.id, current)) {
-          targetSectionId = String(over.id);
-          const targetSection = current.find((s) => s.id === targetSectionId);
-          if (!targetSection) return current;
-          targetIndex = targetSection.poses.length;
-        } else {
-          const overPose = parsePoseSortableId(over.id);
-          if (!overPose) return current;
-          targetSectionId = overPose.sectionId;
-          const targetSection = current.find((s) => s.id === targetSectionId);
-          targetIndex = targetSection?.poses.findIndex((p) => p.id === overPose.poseId) ?? -1;
-          if (targetIndex === -1) return current;
-        }
-
-        if (activePose.sectionId === targetSectionId && active.id === over.id) return current;
-
-        poseDropTargetSectionId = targetSectionId;
-
-        const sourceSection = current.find((s) => s.id === activePose.sectionId);
-        if (!sourceSection) return current;
-        const pose = sourceSection.poses.find((p) => p.id === activePose.poseId);
-        if (!pose) return current;
-
-        if (activePose.sectionId === targetSectionId) {
-          const fromIndex = sourceSection.poses.findIndex((p) => p.id === activePose.poseId);
-          let toIndex = targetIndex;
-          if (fromIndex < toIndex) toIndex -= 1;
-          if (fromIndex === toIndex) return current;
-          return current.map((s) =>
-            s.id === targetSectionId ? { ...s, poses: arrayMove(s.poses, fromIndex, toIndex) } : s,
-          );
-        }
-
-        return current.map((s) => {
-          if (s.id === activePose.sectionId) return { ...s, poses: s.poses.filter((p) => p.id !== activePose.poseId) };
-          if (s.id === targetSectionId) {
-            const next = [...s.poses];
-            next.splice(targetIndex, 0, pose);
-            return { ...s, poses: next };
-          }
-          return s;
-        });
-      });
-
-      if (poseDropTargetSectionId) expandSection(poseDropTargetSectionId);
-      return;
-    }
-
+    if (!over || active.id === over.id) return;
     if (isSectionSortableId(active.id, sections) && isSectionSortableId(over.id, sections)) {
-      if (active.id === over.id) return;
       updateSections((current) => {
         const oldIndex = current.findIndex((s) => s.id === active.id);
         const newIndex = current.findIndex((s) => s.id === over.id);
@@ -1507,8 +1419,52 @@ export default function BuilderPage() {
   };
 
   const handleDragCancel = () => {
-    setDraggingPoseLabel(null);
     setDraggingSectionTitle(null);
+  };
+
+  /** Nudge a pose one slot up/down, hopping into the adjacent non-empty section at the ends. */
+  const movePose = (sectionId: string, poseId: string, dir: -1 | 1) => {
+    const si = sections.findIndex((s) => s.id === sectionId);
+    if (si === -1) return;
+    const pi = sections[si].poses.findIndex((p) => p.id === poseId);
+    if (pi === -1) return;
+
+    const next = sections.map((s) => ({ ...s, poses: [...s.poses] }));
+    const src = next[si];
+    let crossedTo: string | null = null;
+
+    if (dir === -1) {
+      if (pi > 0) {
+        [src.poses[pi - 1], src.poses[pi]] = [src.poses[pi], src.poses[pi - 1]];
+      } else {
+        let ti = -1;
+        for (let k = si - 1; k >= 0; k--) if (next[k].poses.length > 0) { ti = k; break; }
+        if (ti === -1) return;
+        const [moved] = src.poses.splice(pi, 1);
+        next[ti].poses.push(moved);
+        crossedTo = next[ti].id;
+      }
+    } else {
+      if (pi < src.poses.length - 1) {
+        [src.poses[pi + 1], src.poses[pi]] = [src.poses[pi], src.poses[pi + 1]];
+      } else {
+        let ti = -1;
+        for (let k = si + 1; k < next.length; k++) if (next[k].poses.length > 0) { ti = k; break; }
+        if (ti === -1) return;
+        const [moved] = src.poses.splice(pi, 1);
+        next[ti].poses.unshift(moved);
+        crossedTo = next[ti].id;
+      }
+    }
+
+    updateSections(next);
+    if (crossedTo) { expandSection(crossedTo); expandSection(sectionId); }
+  };
+
+  const removePose = (sectionId: string, poseId: string) => {
+    updateSections((prev) =>
+      prev.map((s) => (s.id === sectionId ? { ...s, poses: s.poses.filter((p) => p.id !== poseId) } : s)),
+    );
   };
 
   const handleAddPose = (sectionId: string, option: PoseOption) => {
@@ -1580,6 +1536,30 @@ export default function BuilderPage() {
     () => (peakPose ? computePeakReadiness(sections, peakPose) : null),
     [sections, peakPose],
   );
+
+  // The id of the first placed instance of the peak pose, so its card can carry
+  // the highlight + readiness note. Null when no peak is set or it isn't placed yet.
+  const peakPoseId = useMemo(() => {
+    if (!peakPose) return null;
+    for (const section of sections) {
+      const match = section.poses.find((p) => p.pose === peakPose);
+      if (match) return match.id;
+    }
+    return null;
+  }, [sections, peakPose]);
+
+  // First/last pose ids across the whole sequence — used to disable ▲ / ▼ at the ends.
+  const { firstPoseId, lastPoseId } = useMemo(() => {
+    let first: string | null = null;
+    let last: string | null = null;
+    for (const section of sections) {
+      for (const pose of section.poses) {
+        if (first === null) first = pose.id;
+        last = pose.id;
+      }
+    }
+    return { firstPoseId: first, lastPoseId: last };
+  }, [sections]);
 
   const handleAddPrep = (poseName: string) => {
     updateSections((prev) => insertPoseBeforePeak(prev, poseName, peakPose));
@@ -1723,13 +1703,13 @@ export default function BuilderPage() {
                 }}
                 autoFocus
                 placeholder="Sequence name…"
-                className="w-full bg-transparent text-3xl font-light tracking-tight text-stone-900 placeholder:text-stone-300 focus:outline-none"
+                className="w-full bg-transparent font-display text-3xl font-light tracking-tight text-stone-900 placeholder:text-stone-300 focus:outline-none"
               />
             ) : (
               <button
                 type="button"
                 onClick={startEditingName}
-                className={`text-left text-3xl font-light tracking-tight transition hover:text-stone-600 ${
+                className={`text-left font-display text-3xl font-light tracking-tight transition hover:text-stone-600 ${
                   name ? "text-stone-900" : "text-stone-300"
                 }`}
               >
@@ -1741,7 +1721,7 @@ export default function BuilderPage() {
           {/* Metadata fields */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-stone-400">
+              <label className="mb-1 block text-xs text-stone-400">
                 Theme
               </label>
               <input
@@ -1754,7 +1734,7 @@ export default function BuilderPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-stone-400">
+              <label className="mb-1 block text-xs text-stone-400">
                 Peak pose
               </label>
               <PeakPosePicker value={peakPose} onChange={setPeakPose} />
@@ -1782,10 +1762,6 @@ export default function BuilderPage() {
               <SequenceAuditPanel report={auditReport} onAction={handleAuditAction} />
             )}
 
-            {peakReadiness && (
-              <PeakReadinessPanel readiness={peakReadiness} onAddPrep={handleAddPrep} />
-            )}
-
             <EnergyArc sections={sections} />
 
             <SortableContext items={sectionIds} strategy={verticalListSortingStrategy}>
@@ -1796,27 +1772,27 @@ export default function BuilderPage() {
                     section={section}
                     isCollapsed={isSectionCollapsed(section.id)}
                     missingPrereqsMap={missingPrereqsMap}
+                    peakPoseId={peakPoseId}
+                    peakReadiness={peakReadiness}
+                    firstPoseId={firstPoseId}
+                    lastPoseId={lastPoseId}
                     onToggleCollapse={toggleSectionCollapse}
                     onUpdateTitle={updateSectionTitle}
                     onToggleSecondSide={toggleSecondSide}
                     onUpdateCue={updatePoseCue}
                     onAddPose={setAddPoseSectionId}
+                    onAddPrep={handleAddPrep}
+                    onMovePose={movePose}
+                    onRemovePose={removePose}
                   />
                 ))}
               </div>
             </SortableContext>
 
-            {draggingPoseLabel && <TrashDropZone />}
-
             <DragOverlay>
-              {draggingPoseLabel ? (
-                <div className="rounded-xl border border-stone-300 bg-white px-4 py-3 shadow-md">
-                  <p className="text-sm font-medium text-stone-800">{draggingPoseLabel}</p>
-                </div>
-              ) : null}
               {draggingSectionTitle ? (
                 <div className="rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 shadow-md">
-                  <p className="text-sm font-medium uppercase tracking-[0.14em] text-stone-700">
+                  <p className="font-display text-base text-stone-700">
                     {draggingSectionTitle}
                   </p>
                 </div>
@@ -1828,7 +1804,9 @@ export default function BuilderPage() {
         {/* Footer */}
         <footer className="mt-8">
           <div className="rounded-2xl bg-white/80 px-5 py-4 text-sm text-stone-600 ring-1 ring-stone-200/70">
-            <p className="font-medium text-stone-800">Estimated class time: {formatMinutes(totalMinutes)}</p>
+            <p className="text-stone-600">
+              About <span className="font-display text-base text-stone-800">{formatMinutes(totalMinutes)}</span> on the mat
+            </p>
           </div>
         </footer>
       </main>
