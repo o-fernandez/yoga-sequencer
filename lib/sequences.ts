@@ -97,6 +97,9 @@ export function sortedUpcomingEntries(dates: TeachEntry[]): TeachEntry[] {
 }
 
 const STORAGE_KEY = "yoga-sequences";
+const SEEDS_VERSION = 2;
+const SEEDS_VERSION_KEY = "yoga-seeds-version";
+const OLD_SEED_IDS = new Set(["seed-shoulder-opening", "seed-grounding-flow", "seed-hip-opening-45"]);
 
 export function generateId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -144,265 +147,174 @@ function p(id: string, pose: string, cue?: string): PoseItem {
 }
 
 const SEED_SEQUENCES: SequenceRecord[] = [
-  // 1 ── Building-rounds shoulder opener (his confirmed March 2026 structure)
+  // 1 ── Hip freedom: well-worn class taught three times, notes showing evolution
   {
-    id: "seed-shoulder-opening",
-    name: "Shoulder Opening — Building Rounds",
-    theme: "Heart and shoulder opening",
-    peakPose: "Crow",
-    dates: [{ date: "2026-03-15" }, { date: "2026-04-12" }, { date: "2026-05-31" }],
-    createdAt: "2026-03-12T09:00:00.000Z",
+    id: "seed-hip-freedom",
+    name: "Hip freedom",
+    theme: "Creating space where we hold tension",
+    peakPose: "Pigeon",
+    showAnalysis: false,
+    dates: [
+      { date: "2026-04-14", notes: "First time with this structure. Went long on floor — had to cut wind-down short. Pigeon felt rushed. Need to trim the standing series or drop one neutral hip pose." },
+      { date: "2026-05-05", notes: "Added Skandasana to the neutral hips round — beautiful transition from Crescent. Students loved it. Floor felt right this time. Wind-down was complete for the first time." },
+      { date: "2026-05-20", notes: "This is the version I'll keep. Skandasana into Figure 4 Balance is the signature moment. Wheel landed for three people who'd never gotten it. Save this." },
+    ],
+    createdAt: "2026-04-12T09:00:00.000Z",
     updatedAt: "2026-05-20T09:00:00.000Z",
     sections: [
       {
-        id: "sh-warmup", title: "Warm-up", secondSide: false,
+        id: "hf-opening", title: "Opening", secondSide: false,
         poses: [
-          p("sh-1", "Centering Breath"),
-          p("sh-2", "Cat/Cow"),
-          p("sh-3", "Child's Pose"),
-          p("sh-4", "Downward Dog", "Bend the knees generously, pedal the heels to wake up the calves"),
+          p("hf-op-1", "Centering Breath"),
+          p("hf-op-2", "Cat/Cow"),
+          p("hf-op-3", "Child's Pose"),
+          p("hf-op-4", "Downward Dog", "Bend the knees generously — we're just waking up"),
         ],
       },
       {
-        id: "sh-suryaA", title: "Surya A ×4", secondSide: false,
+        id: "hf-surya-a", title: "Surya A", secondSide: false, rounds: 3,
         poses: [
-          p("sh-5", "Mountain Pose"),
-          p("sh-6", "Standing Forward Fold"),
-          p("sh-7", "Half Lift"),
-          p("sh-8", "Plank"),
-          p("sh-9", "Chaturanga"),
-          p("sh-10", "Upward Dog"),
-          p("sh-11", "Downward Dog"),
+          p("hf-sa-1",  "Mountain Pose"),
+          p("hf-sa-2",  "Extended Mountain"),
+          p("hf-sa-3",  "Standing Forward Fold"),
+          p("hf-sa-4",  "Half Lift"),
+          p("hf-sa-5",  "Plank"),
+          p("hf-sa-6",  "Chaturanga"),
+          p("hf-sa-7",  "Upward Dog"),
+          p("hf-sa-8",  "Downward Dog"),
+          p("hf-sa-9",  "Half Lift"),
+          p("hf-sa-10", "Standing Forward Fold"),
+          p("hf-sa-11", "Extended Mountain"),
+          p("hf-sa-12", "Mountain Pose"),
         ],
       },
       {
-        id: "sh-round1", title: "Round 1 · Neutral Hips", secondSide: true,
+        id: "hf-surya-b", title: "Surya B", secondSide: false, rounds: 2,
         poses: [
-          p("sh-12", "Chair", "Eagle arms — take both sides within the hold"),
-          p("sh-13", "Warrior I"),
-          p("sh-14", "Low Lunge"),
-          p("sh-15", "Eagle", "Lift the elbows to shoulder height — feel the space open between the shoulder blades"),
-          p("sh-16", "Vinyasa"),
+          p("hf-sb-1",  "Chair"),
+          p("hf-sb-2",  "Standing Forward Fold"),
+          p("hf-sb-3",  "Half Lift"),
+          p("hf-sb-4",  "Vinyasa"),
+          p("hf-sb-5",  "Warrior I"),
+          p("hf-sb-6",  "Vinyasa"),
+          p("hf-sb-7",  "Warrior I"),
+          p("hf-sb-8",  "Vinyasa"),
+          p("hf-sb-9",  "Standing Forward Fold"),
+          p("hf-sb-10", "Half Lift"),
+          p("hf-sb-11", "Chair"),
+          p("hf-sb-12", "Mountain Pose"),
         ],
       },
       {
-        id: "sh-round2", title: "Round 2 · Open Hips", secondSide: true,
+        id: "hf-neutral", title: "Neutral hips", secondSide: true,
         poses: [
-          p("sh-17", "Warrior I"),
-          p("sh-18", "Devotional Warrior", "Interlace the hands behind the back, fold the forehead toward the inside of the front foot"),
-          p("sh-19", "Warrior II"),
-          p("sh-20", "Peaceful Warrior"),
-          p("sh-21", "Triangle"),
-          p("sh-22", "Extended Side Angle"),
-          p("sh-23", "Vinyasa"),
+          p("hf-nh-1", "Low Lunge"),
+          p("hf-nh-2", "Crescent"),
+          p("hf-nh-3", "Skandasana", "Fly your warrior sideways, bend one knee as you come back down"),
+          p("hf-nh-4", "Figure 4 Balance"),
+          p("hf-nh-5", "Vinyasa"),
         ],
       },
       {
-        id: "sh-round3", title: "Round 3 · Peak", secondSide: true,
+        id: "hf-open", title: "Open hips", secondSide: true,
         poses: [
-          p("sh-24", "Devotional Warrior"),
-          p("sh-25", "Pyramid"),
-          p("sh-26", "Warrior II"),
-          p("sh-27", "Triangle"),
-          p("sh-28", "Half Moon"),
-          p("sh-29", "Chair"),
-          p("sh-30", "Crow", "Tip the weight forward into the hands until the feet float"),
-          p("sh-31", "Vinyasa"),
+          p("hf-oh-1", "Warrior II"),
+          p("hf-oh-2", "Triangle"),
+          p("hf-oh-3", "Lizard", "Stay high if the hips are still warming up"),
+          p("hf-oh-4", "Pyramid"),
         ],
       },
       {
-        id: "sh-floor", title: "Floor", secondSide: false,
+        id: "hf-floor", title: "Floor", secondSide: false,
         poses: [
-          p("sh-32", "Forearm Plank"),
-          p("sh-33", "Sphinx"),
-          p("sh-34", "Locust"),
-          p("sh-35", "Bow"),
-          p("sh-36", "Bridge", "Interlace the hands beneath you, walk the shoulders under"),
-          p("sh-37", "Wheel", "This is what we came here for"),
-          p("sh-38", "Constructive Rest"),
+          p("hf-fl-1", "Sphinx"),
+          p("hf-fl-2", "Locust"),
+          p("hf-fl-3", "Locust"),
+          p("hf-fl-4", "Bridge", "Interlace the hands, walk the shoulders under"),
+          p("hf-fl-5", "Wheel"),
+          p("hf-fl-6", "Constructive Rest"),
         ],
       },
       {
-        id: "sh-winddown", title: "Wind-down (one side, then the other)", secondSide: true,
+        id: "hf-winddown", title: "Wind-down", secondSide: true,
         poses: [
-          p("sh-39", "Pigeon"),
-          p("sh-40", "Gomukhasana"),
-          p("sh-41", "Janu Sirsasana"),
-          p("sh-42", "Stargazer"),
-          p("sh-43", "Downward Dog"),
+          p("hf-wd-1", "Pigeon", "This is what the whole class was building toward"),
+          p("hf-wd-2", "Gomukhasana"),
+          p("hf-wd-3", "Janu Sirsasana"),
         ],
       },
       {
-        id: "sh-close", title: "Savasana", secondSide: false,
-        poses: [p("sh-44", "Savasana")],
-      },
-    ],
-  },
-
-  // 2 ── Flat-architecture grounding flow (his YO BK comfort zone)
-  {
-    id: "seed-grounding-flow",
-    name: "Grounding Power Flow",
-    theme: "Steadiness and grounding",
-    peakPose: "Half Moon",
-    dates: [{ date: "2026-02-08" }, { date: "2026-04-26" }, { date: "2026-05-17" }],
-    createdAt: "2026-02-05T09:00:00.000Z",
-    updatedAt: "2026-05-17T09:00:00.000Z",
-    sections: [
-      {
-        id: "gr-warmup", title: "Warm-up", secondSide: false,
+        id: "hf-close", title: "Closing", secondSide: false,
         poses: [
-          p("gr-1", "Centering Breath"),
-          p("gr-2", "Cat/Cow"),
-          p("gr-3", "Downward Dog"),
-          p("gr-4", "Beast", "Knees hovering an inch off the floor — quiet and strong"),
-        ],
-      },
-      {
-        id: "gr-suryaA", title: "Surya A ×4", secondSide: false,
-        poses: [
-          p("gr-5", "Mountain Pose"),
-          p("gr-6", "Standing Forward Fold"),
-          p("gr-7", "Half Lift"),
-          p("gr-8", "Plank"),
-          p("gr-9", "Chaturanga"),
-          p("gr-10", "Upward Dog"),
-          p("gr-11", "Downward Dog"),
-        ],
-      },
-      {
-        id: "gr-suryaB", title: "Surya B ×2", secondSide: false,
-        poses: [
-          p("gr-12", "Chair"),
-          p("gr-13", "Warrior I"),
-          p("gr-14", "Vinyasa"),
-        ],
-      },
-      {
-        id: "gr-neutral", title: "Neutral Hips", secondSide: true,
-        poses: [
-          p("gr-15", "Low Lunge"),
-          p("gr-16", "Crescent"),
-          p("gr-17", "Warrior III"),
-          p("gr-18", "Eagle"),
-          p("gr-19", "Vinyasa"),
-        ],
-      },
-      {
-        id: "gr-open", title: "Open Hips", secondSide: true,
-        poses: [
-          p("gr-20", "Warrior II"),
-          p("gr-21", "Peaceful Warrior"),
-          p("gr-22", "Triangle"),
-          p("gr-23", "Half Moon", "Stack the top hip, reach the top fingertips to the ceiling"),
-          p("gr-24", "Prasarita"),
-        ],
-      },
-      {
-        id: "gr-midline", title: "Midline Close", secondSide: false,
-        poses: [
-          p("gr-25", "Chair"),
-          p("gr-26", "Malasana"),
-          p("gr-27", "Crow"),
-        ],
-      },
-      {
-        id: "gr-floor", title: "Floor", secondSide: false,
-        poses: [
-          p("gr-28", "Forearm Plank"),
-          p("gr-29", "Sphinx"),
-          p("gr-30", "Locust"),
-          p("gr-31", "Bridge"),
-          p("gr-32", "Constructive Rest"),
-        ],
-      },
-      {
-        id: "gr-winddown", title: "Wind-down (one side, then the other)", secondSide: true,
-        poses: [
-          p("gr-33", "Pigeon"),
-          p("gr-34", "Janu Sirsasana"),
-        ],
-      },
-      {
-        id: "gr-close", title: "Close", secondSide: false,
-        poses: [
-          p("gr-35", "Seated Forward Fold"),
-          p("gr-36", "Supine Twist"),
-          p("gr-37", "Savasana"),
+          p("hf-cl-1", "Supine Twist"),
+          p("hf-cl-2", "Savasana"),
         ],
       },
     ],
   },
 
-  // 3 ── Tight 45-min hip opener (hip emphasis shifted into the wind-down)
+  // 2 ── Heart opener: structural sketch, planned for next week
   {
-    id: "seed-hip-opening-45",
-    name: "Hip Opening — 45 min",
-    theme: "Releasing the hips",
-    peakPose: "Lizard",
-    dates: [{ date: "2026-05-10" }, { date: "2026-06-07" }],
-    createdAt: "2026-05-06T09:00:00.000Z",
-    updatedAt: "2026-05-10T09:00:00.000Z",
+    id: "seed-heart-opener",
+    name: "Expanding what we can receive",
+    theme: "Expanding what we can receive",
+    peakPose: "Wheel",
+    showAnalysis: false,
+    dates: [{ date: "2026-06-02" }],
+    createdAt: "2026-05-29T10:00:00.000Z",
+    updatedAt: "2026-05-29T10:00:00.000Z",
     sections: [
+      { id: "ho-opening",   title: "Opening",        secondSide: false, poses: [] },
       {
-        id: "hi-warmup", title: "Warm-up", secondSide: false,
+        id: "ho-surya-a", title: "Surya A", secondSide: false, rounds: 4,
         poses: [
-          p("hi-1", "Centering Breath"),
-          p("hi-2", "Cat/Cow"),
-          p("hi-3", "Downward Dog"),
+          p("ho-sa-1",  "Mountain Pose"),
+          p("ho-sa-2",  "Extended Mountain"),
+          p("ho-sa-3",  "Standing Forward Fold"),
+          p("ho-sa-4",  "Half Lift"),
+          p("ho-sa-5",  "Plank"),
+          p("ho-sa-6",  "Chaturanga"),
+          p("ho-sa-7",  "Upward Dog"),
+          p("ho-sa-8",  "Downward Dog"),
+          p("ho-sa-9",  "Half Lift"),
+          p("ho-sa-10", "Standing Forward Fold"),
+          p("ho-sa-11", "Extended Mountain"),
+          p("ho-sa-12", "Mountain Pose"),
         ],
       },
+      { id: "ho-shoulders", title: "Shoulder series", secondSide: true,  poses: [] },
       {
-        id: "hi-suryaA", title: "Surya A ×3", secondSide: false,
+        id: "ho-floor", title: "Floor", secondSide: false,
         poses: [
-          p("hi-4", "Mountain Pose"),
-          p("hi-5", "Standing Forward Fold"),
-          p("hi-6", "Half Lift"),
-          p("hi-7", "Plank"),
-          p("hi-8", "Chaturanga"),
-          p("hi-9", "Upward Dog"),
+          p("ho-fl-1",  "Plank"),
+          p("ho-fl-2",  "Forearm Plank"),
+          p("ho-fl-3",  "Sphinx"),
+          p("ho-fl-4",  "Locust"),
+          p("ho-fl-5",  "Locust"),
+          p("ho-fl-6",  "Bow"),
+          p("ho-fl-7",  "Bridge"),
+          p("ho-fl-8",  "Wheel"),
+          p("ho-fl-9",  "Supta Baddhakonasana"),
+          p("ho-fl-10", "Downward Dog"),
         ],
       },
-      {
-        id: "hi-neutral", title: "Neutral Hips", secondSide: true,
-        poses: [
-          p("hi-10", "Low Lunge"),
-          p("hi-11", "Skandasana", "Fly your warrior to face the side of the room, bend one knee as you come back and down"),
-          p("hi-12", "Figure 4 Balance"),
-          p("hi-13", "Vinyasa"),
-        ],
-      },
-      {
-        id: "hi-open", title: "Open Hips", secondSide: true,
-        poses: [
-          p("hi-14", "Warrior II"),
-          p("hi-15", "Triangle"),
-          p("hi-16", "Lizard"),
-        ],
-      },
-      {
-        id: "hi-floor", title: "Floor", secondSide: false,
-        poses: [
-          p("hi-17", "Sphinx"),
-          p("hi-18", "Bridge"),
-          p("hi-19", "Supta Baddhakonasana"),
-        ],
-      },
-      {
-        id: "hi-winddown", title: "Wind-down (one side, then the other)", secondSide: true,
-        poses: [
-          p("hi-20", "Pigeon"),
-          p("hi-21", "Gomukhasana"),
-        ],
-      },
-      {
-        id: "hi-close", title: "Close", secondSide: false,
-        poses: [
-          p("hi-22", "Happy Baby"),
-          p("hi-23", "Savasana"),
-        ],
-      },
+      { id: "ho-winddown",  title: "Wind-down",       secondSide: false, poses: [] },
     ],
+  },
+
+  // 3 ── Finding steadiness: quick teaching log, no sections
+  {
+    id: "seed-finding-steadiness",
+    name: "Finding steadiness",
+    theme: "Finding steadiness",
+    peakPose: "Eagle",
+    showAnalysis: false,
+    dates: [
+      { date: "2026-05-27", notes: "Students were scattered today — this grounding theme landed. Held Eagle longer than planned, about 8 breaths each side. New cue: 'let your gaze soften as the body settles.' Keeping this." },
+    ],
+    createdAt: "2026-05-27T09:00:00.000Z",
+    updatedAt: "2026-05-27T09:00:00.000Z",
+    sections: [],
   },
 ];
 
@@ -413,12 +325,21 @@ export function loadSequences(): SequenceRecord[] {
     if (!raw) {
       const seeded = SEED_SEQUENCES.map(migrate);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+      localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
       return seeded;
     }
     const parsed = JSON.parse(raw);
-    const migrated = parsed.map(migrate);
-    // Write back if migration changed anything (e.g. breaths normalization on first deploy)
-    if (JSON.stringify(parsed) !== JSON.stringify(migrated)) {
+    const storedVersion = Number(localStorage.getItem(SEEDS_VERSION_KEY) ?? 0);
+    let records: SequenceRecord[] = parsed;
+    if (storedVersion < SEEDS_VERSION) {
+      // Remove old seeds, inject new ones at the front
+      records = (parsed as SequenceRecord[]).filter((r) => !OLD_SEED_IDS.has(r.id));
+      records = [...SEED_SEQUENCES, ...records];
+      localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
+    }
+    const migrated = records.map(migrate);
+    // Write back if migration changed anything
+    if (JSON.stringify(records) !== JSON.stringify(migrated) || storedVersion < SEEDS_VERSION) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
     }
     return migrated;
