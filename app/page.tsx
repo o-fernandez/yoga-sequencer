@@ -10,6 +10,7 @@ import {
   duplicateSequence,
   type SequenceRecord,
 } from "@/lib/sequences";
+import { getPoseIllustration } from "@/lib/pose-illustrations";
 
 function formatDate(iso: string): string {
   // Parse as local noon to avoid timezone off-by-one
@@ -17,10 +18,6 @@ function formatDate(iso: string): string {
   const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
   if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
   return d.toLocaleDateString("en-US", opts);
-}
-
-function totalPoses(seq: SequenceRecord): number {
-  return seq.sections.reduce((sum, s) => sum + s.poses.length, 0);
 }
 
 /** Max date from a sequence's dates array; falls back to updatedAt for sorting. */
@@ -142,7 +139,6 @@ function SequenceCard({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const poseCount = totalPoses(sequence);
   const isLight = isLightweightLog(sequence);
   const noteExcerpt = firstNoteExcerpt(sequence);
   const chips = sectionChips(sequence);
@@ -151,6 +147,15 @@ function SequenceCard({
   const plannedDates = (sequence.dates ?? []).filter((e) => e.date > today).sort((a, b) => a.date.localeCompare(b.date));
   const nextPlanned = plannedDates[0]?.date;
   const lastTaught = [...taughtDates].sort((a, b) => b.date.localeCompare(a.date))[0]?.date;
+  const taughtCount = taughtDates.length;
+  const displayDate = lastTaught ?? nextPlanned ?? null;
+  const hasAnyDate = !!displayDate;
+  const isPlanned = taughtCount === 0 && !!nextPlanned;
+  const status: string | null =
+    taughtCount === 1 ? "Taught once" :
+    taughtCount > 1 ? `Taught ${taughtCount}×` :
+    nextPlanned ? "Planned" :
+    null;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -233,35 +238,65 @@ function SequenceCard({
         }
       }}
       {...handlers}
-      className={`cursor-pointer select-none touch-pan-y rounded-2xl border bg-white/70 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] backdrop-blur-sm transition [-webkit-touch-callout:none] hover:bg-white/80 hover:shadow-[0_2px_8px_rgba(0,0,0,0.07)] ${
+      className={`relative cursor-pointer select-none touch-pan-y rounded-2xl border bg-white/70 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] backdrop-blur-sm transition [-webkit-touch-callout:none] hover:bg-white/80 hover:shadow-[0_2px_8px_rgba(0,0,0,0.07)] ${
         selected
           ? "border-stone-400 ring-2 ring-stone-400/60"
           : "border-stone-300/40"
       }`}
     >
-      <div className="flex items-start gap-3">
+      {/* ⋯ menu — absolute top-right so the highlight block owns the right column */}
+      {!selectionMode && (
+        <div
+          className="absolute right-3.5 top-3.5"
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+        >
+          <button
+            ref={buttonRef}
+            type="button"
+            onClick={handleMenuToggle}
+            aria-label={`More actions for ${sequence.name || sequence.theme}`}
+            aria-expanded={menuOpen}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-600"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
+              <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
+            </svg>
+          </button>
+          {menuPortal}
+        </div>
+      )}
+      <div className={`flex items-start gap-3 ${!selectionMode ? "pr-10" : ""}`}>
         {selectionMode && <SelectIndicator selected={selected} />}
+        {/* Left column: theme, date/status, pull quote, section chips */}
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-base font-medium text-stone-900">
-            {sequence.name}
+          <h2
+            className="font-display text-base font-medium leading-snug text-stone-900"
+            style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+          >
+            {sequence.theme || sequence.name || (
+              <span className="text-stone-400">Untitled class</span>
+            )}
           </h2>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-            {sequence.theme && (
-              <p className="text-sm italic text-stone-500">{sequence.theme}</p>
-            )}
-            {sequence.peakPose && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-0.5 text-xs text-stone-600">
-                <span aria-hidden className="text-stone-400">↑</span>
-                {sequence.peakPose}
-              </span>
-            )}
-          </div>
+          {hasAnyDate && (
+            <p className="mt-1.5 text-[13px] text-stone-500">
+              {formatDate(displayDate!)}
+              {status && (
+                <>
+                  <span className="mx-1.5 text-stone-300">·</span>
+                  <span className={isPlanned ? "text-stone-400" : ""}>{status}</span>
+                </>
+              )}
+            </p>
+          )}
           {noteExcerpt && (
-            <p className="mt-1.5 text-sm italic text-stone-400">{noteExcerpt}</p>
+            <p className="mt-2 border-l-2 border-stone-200 pl-2.5 text-[13px] italic leading-relaxed text-stone-500">
+              {noteExcerpt}
+            </p>
           )}
           {!isLight && chips.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
-              {chips.map((chip) => (
+              {chips.slice(0, 2).map((chip) => (
                 <span
                   key={chip}
                   className="rounded-full border border-stone-100 bg-stone-50/80 px-2 py-0.5 text-[11px] text-stone-500"
@@ -271,39 +306,14 @@ function SequenceCard({
               ))}
             </div>
           )}
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-stone-400">
-            {!isLight && poseCount > 0 && (
-              <span>{poseCount} pose{poseCount === 1 ? "" : "s"}</span>
-            )}
-            {taughtDates.length > 0 && (
-              <span>Taught {taughtDates.length}×</span>
-            )}
-            {nextPlanned ? (
-              <span className="text-stone-500">Next {formatDate(nextPlanned)}</span>
-            ) : lastTaught ? (
-              <span className={isLight ? "text-stone-500" : ""}>{formatDate(lastTaught)}</span>
-            ) : null}
-          </div>
         </div>
-        {!selectionMode && (
-          <div
-            className="shrink-0"
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
-          >
-            <button
-              ref={buttonRef}
-              type="button"
-              onClick={handleMenuToggle}
-              aria-label={`More actions for ${sequence.name}`}
-              aria-expanded={menuOpen}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-600"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
-                <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
-              </svg>
-            </button>
-            {menuPortal}
+        {/* Class highlight block — right-anchored, always visible */}
+        {sequence.peakPose && (
+          <div className="flex w-16 shrink-0 flex-col items-center rounded-xl border border-stone-200/80 bg-stone-50 px-2 py-2.5 text-center">
+            {getPoseIllustration(sequence.peakPose, "w-9 h-9 text-stone-600")}
+            <span className="mt-1 break-words text-[11px] font-medium leading-tight text-stone-600">
+              {sequence.peakPose}
+            </span>
           </div>
         )}
       </div>
