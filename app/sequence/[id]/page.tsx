@@ -1993,7 +1993,11 @@ export default function BuilderPage() {
           </div>
         </header>
 
+        {/* Teaching Log — anchor of the record, above the structural detail */}
+        <TeachingLog dates={dates} onChange={setDates} />
+
         {/* Sequence builder */}
+        <div className="mt-8 border-t border-stone-200/50 pt-8">
         {!loaded ? (
           <div className="py-16 text-center text-sm text-stone-400">Loading…</div>
         ) : (
@@ -2051,9 +2055,7 @@ export default function BuilderPage() {
             </DragOverlay>
           </DndContext>
         )}
-
-        {/* Teaching Log */}
-        <TeachingLog dates={dates} onChange={setDates} />
+        </div>
 
         {/* Footer */}
         <footer className="mt-8">

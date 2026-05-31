@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -28,6 +29,34 @@ function sortKey(seq: SequenceRecord): string {
     return [...seq.dates.map((e) => e.date)].sort().at(-1)!;
   }
   return seq.updatedAt;
+}
+
+/** A lightweight log has no sections with poses and no user-named sections. */
+function isLightweightLog(seq: SequenceRecord): boolean {
+  return !seq.sections.some(
+    (s) => s.poses.length > 0 || (s.title !== "New section" && s.title.trim())
+  );
+}
+
+/** Up to 4 chips for substantive sections (named or with poses). */
+function sectionChips(seq: SequenceRecord): string[] {
+  return seq.sections
+    .filter((s) => s.poses.length > 0 || (s.title !== "New section" && s.title.trim()))
+    .slice(0, 4)
+    .map((s) => {
+      const r = s.rounds ?? 1;
+      return r > 1 ? `${s.title} × ${r}` : s.title;
+    });
+}
+
+/** First 80 chars of the most recent teach entry's notes. */
+function firstNoteExcerpt(seq: SequenceRecord): string | null {
+  const entry = [...seq.dates]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .find((e) => e.notes?.trim());
+  if (!entry?.notes) return null;
+  const n = entry.notes.trim();
+  return n.length > 80 ? n.slice(0, 77) + "…" : n;
 }
 
 /**
@@ -114,6 +143,9 @@ function SequenceCard({
   onDelete: () => void;
 }) {
   const poseCount = totalPoses(sequence);
+  const isLight = isLightweightLog(sequence);
+  const noteExcerpt = firstNoteExcerpt(sequence);
+  const chips = sectionChips(sequence);
   const today = new Date().toISOString().slice(0, 10);
   const taughtDates = (sequence.dates ?? []).filter((e) => e.date <= today);
   const plannedDates = (sequence.dates ?? []).filter((e) => e.date > today).sort((a, b) => a.date.localeCompare(b.date));
@@ -122,20 +154,71 @@ function SequenceCard({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    const close = () => setMenuOpen(false);
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        menuRef.current && !menuRef.current.contains(target) &&
+        buttonRef.current && !buttonRef.current.contains(target)
+      ) close();
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, [menuOpen]);
+
+  const handleMenuToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (menuOpen) { setMenuOpen(false); return; }
+    const rect = buttonRef.current!.getBoundingClientRect();
+    const MENU_HEIGHT = 80;
+    const top = window.innerHeight - rect.bottom >= MENU_HEIGHT + 8
+      ? rect.bottom + 4
+      : rect.top - MENU_HEIGHT - 4;
+    setMenuPos({ top, right: window.innerWidth - rect.right });
+    setMenuOpen(true);
+  };
 
   const handlers = useLongPress(
     onEnterSelection,
     () => (selectionMode ? onToggleSelect() : onOpen()),
   );
+
+  const menuPortal = menuOpen && menuPos
+    ? createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, right: menuPos.right, zIndex: 9999 }}
+          className="w-36 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDuplicate(); setMenuOpen(false); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-700 transition hover:bg-stone-50"
+          >
+            Duplicate
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(); setMenuOpen(false); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
+          >
+            Delete
+          </button>
+        </div>,
+        document.body
+      )
+    : null;
 
   return (
     <article
@@ -173,28 +256,45 @@ function SequenceCard({
               </span>
             )}
           </div>
+          {noteExcerpt && (
+            <p className="mt-1.5 text-sm italic text-stone-400">{noteExcerpt}</p>
+          )}
+          {!isLight && chips.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {chips.map((chip) => (
+                <span
+                  key={chip}
+                  className="rounded-full border border-stone-100 bg-stone-50/80 px-2 py-0.5 text-[11px] text-stone-500"
+                >
+                  {chip}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-stone-400">
-            <span>{poseCount} pose{poseCount === 1 ? "" : "s"}</span>
+            {!isLight && poseCount > 0 && (
+              <span>{poseCount} pose{poseCount === 1 ? "" : "s"}</span>
+            )}
             {taughtDates.length > 0 && (
               <span>Taught {taughtDates.length}×</span>
             )}
             {nextPlanned ? (
               <span className="text-stone-500">Next {formatDate(nextPlanned)}</span>
             ) : lastTaught ? (
-              <span>{formatDate(lastTaught)}</span>
+              <span className={isLight ? "text-stone-500" : ""}>{formatDate(lastTaught)}</span>
             ) : null}
           </div>
         </div>
         {!selectionMode && (
           <div
-            ref={menuRef}
-            className="relative shrink-0"
+            className="shrink-0"
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
           >
             <button
+              ref={buttonRef}
               type="button"
-              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+              onClick={handleMenuToggle}
               aria-label={`More actions for ${sequence.name}`}
               aria-expanded={menuOpen}
               className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-600"
@@ -203,24 +303,7 @@ function SequenceCard({
                 <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
               </svg>
             </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-9 z-20 w-36 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onDuplicate(); setMenuOpen(false); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-700 transition hover:bg-stone-50"
-                >
-                  Duplicate
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onDelete(); setMenuOpen(false); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
-                >
-                  Delete
-                </button>
-              </div>
-            )}
+            {menuPortal}
           </div>
         )}
       </div>
@@ -358,18 +441,12 @@ export default function LibraryPage() {
               Your Sequences
             </h1>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:mt-3">
-            <Link
-              href="/quick-entry"
-              className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
-            >
-              Quick entry
-            </Link>
+          <div className="flex shrink-0 items-center sm:mt-3">
             <Link
               href="/sequence/new"
               className="rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 shadow-sm transition hover:bg-stone-700"
             >
-              + New sequence
+              + New
             </Link>
           </div>
         </header>
