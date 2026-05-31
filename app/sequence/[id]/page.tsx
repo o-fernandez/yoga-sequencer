@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   generateId,
   loadSequence,
@@ -54,6 +54,25 @@ function formatMinutes(minutes: number) {
   const secs = Math.round((minutes - whole) * 60);
   if (secs === 0) return `${whole} min`;
   return `${whole} min ${secs} sec`;
+}
+
+/**
+ * Derive a sequence name from a theme string by taking the first 3 content
+ * words (skipping stop-words). Falls back to "Untitled sequence".
+ */
+function autoNameFromTheme(theme: string): string {
+  const stop = new Set([
+    "the","a","an","and","or","but","in","on","at","to","for","of","with",
+    "by","is","are","was","were","your","my","our","their",
+  ]);
+  const words = theme
+    .trim()
+    .replace(/[^\w\s]/g, "")
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !stop.has(w.toLowerCase()))
+    .slice(0, 3)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  return words.join(" ");
 }
 
 /** Format YYYY-MM-DD as "May 28" or "May 28, 2027" (includes year only if not current). */
@@ -1095,6 +1114,7 @@ function CompactSectionBlock({
   onMoveSection,
   onMovePose,
   onRemovePose,
+  onDeleteSection,
 }: {
   section: Section;
   peakPoseId: string | null;
@@ -1113,6 +1133,7 @@ function CompactSectionBlock({
   onMoveSection: (dir: -1 | 1) => void;
   onMovePose: (sectionId: string, poseId: string, dir: -1 | 1) => void;
   onRemovePose: (sectionId: string, poseId: string) => void;
+  onDeleteSection: () => void;
 }) {
   const [openPoseId, setOpenPoseId] = useState<string | null>(null);
   const [sectionSettingsOpen, setSectionSettingsOpen] = useState(false);
@@ -1176,23 +1197,29 @@ function CompactSectionBlock({
               {section.title}
             </button>
           )}
-          {section.poses.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setSectionSettingsOpen((v) => !v)}
-              className="flex flex-wrap gap-1 rounded-md px-0.5 -mx-0.5 hover:bg-stone-100/80 transition-colors"
-              aria-label="Section settings"
-            >
-              <span className={`rounded-full px-1.5 py-0 text-[10px] font-medium ${sectionSettingsOpen ? "bg-stone-200 text-stone-600" : "bg-stone-100 text-stone-500"}`}>
-                ×{rounds}
-              </span>
-              {section.secondSide && (
-                <span className={`rounded-full px-1.5 py-0 text-[10px] ${sectionSettingsOpen ? "bg-stone-200 text-stone-500" : "bg-stone-100 text-stone-400"}`}>
-                  ⇄
+          <button
+            type="button"
+            onClick={() => setSectionSettingsOpen((v) => !v)}
+            className="flex flex-wrap gap-1 rounded-md px-0.5 -mx-0.5 hover:bg-stone-100/80 transition-colors"
+            aria-label="Section settings"
+          >
+            {section.poses.length > 0 ? (
+              <>
+                <span className={`rounded-full px-1.5 py-0 text-[10px] font-medium ${sectionSettingsOpen ? "bg-stone-200 text-stone-600" : "bg-stone-100 text-stone-500"}`}>
+                  ×{rounds}
                 </span>
-              )}
-            </button>
-          )}
+                {section.secondSide && (
+                  <span className={`rounded-full px-1.5 py-0 text-[10px] ${sectionSettingsOpen ? "bg-stone-200 text-stone-500" : "bg-stone-100 text-stone-400"}`}>
+                    ⇄
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className={`rounded-full px-1.5 py-0 text-[10px] ${sectionSettingsOpen ? "bg-stone-200 text-stone-500" : "bg-stone-100 text-stone-400"}`}>
+                ⋯
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Chips + add button */}
@@ -1238,7 +1265,7 @@ function CompactSectionBlock({
       </div>
 
       {/* Section settings panel */}
-      {sectionSettingsOpen && section.poses.length > 0 && (
+      {sectionSettingsOpen && (
         <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-2.5">
           <div className="flex items-center gap-1">
             <button
@@ -1264,45 +1291,57 @@ function CompactSectionBlock({
               </svg>
             </button>
           </div>
-          <div className="mx-1 h-4 w-px bg-stone-200" />
-          <span className="text-xs text-stone-400">Rounds</span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => onUpdateRounds(section.id, Math.max(1, rounds - 1))}
-              disabled={rounds <= 1}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-200/60 disabled:pointer-events-none disabled:opacity-30"
-            >
-              −
-            </button>
-            <span className="min-w-[2rem] text-center text-sm tabular-nums font-medium text-stone-700">
-              ×{rounds}
-            </span>
-            <button
-              type="button"
-              onClick={() => onUpdateRounds(section.id, Math.min(6, rounds + 1))}
-              disabled={rounds >= 6}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-200/60 disabled:pointer-events-none disabled:opacity-30"
-            >
-              +
-            </button>
-          </div>
+          {section.poses.length > 0 && (
+            <>
+              <div className="mx-1 h-4 w-px bg-stone-200" />
+              <span className="text-xs text-stone-400">Rounds</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => onUpdateRounds(section.id, Math.max(1, rounds - 1))}
+                  disabled={rounds <= 1}
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-200/60 disabled:pointer-events-none disabled:opacity-30"
+                >
+                  −
+                </button>
+                <span className="min-w-[2rem] text-center text-sm tabular-nums font-medium text-stone-700">
+                  ×{rounds}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onUpdateRounds(section.id, Math.min(6, rounds + 1))}
+                  disabled={rounds >= 6}
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-200/60 disabled:pointer-events-none disabled:opacity-30"
+                >
+                  +
+                </button>
+              </div>
+              <div className="mx-1 h-4 w-px bg-stone-200" />
+              <button
+                type="button"
+                onClick={() => onToggleSecondSide(section.id)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  section.secondSide
+                    ? "bg-stone-800 text-white"
+                    : "border border-stone-200 bg-white text-stone-400 hover:border-stone-300 hover:text-stone-600"
+                }`}
+              >
+                {section.secondSide && (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 shrink-0">
+                    <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" />
+                  </svg>
+                )}
+                Both sides
+              </button>
+            </>
+          )}
           <div className="mx-1 h-4 w-px bg-stone-200" />
           <button
             type="button"
-            onClick={() => onToggleSecondSide(section.id)}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              section.secondSide
-                ? "bg-stone-800 text-white"
-                : "border border-stone-200 bg-white text-stone-400 hover:border-stone-300 hover:text-stone-600"
-            }`}
+            onClick={onDeleteSection}
+            className="text-xs text-rose-400 transition hover:text-rose-600"
           >
-            {section.secondSide && (
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 shrink-0">
-                <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" />
-              </svg>
-            )}
-            Both sides
+            Remove section
           </button>
         </div>
       )}
@@ -1418,12 +1457,13 @@ function CompactSectionBlock({
 
 export default function BuilderPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = params.id;
   const isNew = id === "new";
 
   // Sequence metadata
   const [sequenceId] = useState(() => (isNew ? generateId() : id));
-  const [name, setName] = useState(isNew ? "" : "Loading…");
+  const [name, setName] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [theme, setTheme] = useState("");
@@ -1432,28 +1472,21 @@ export default function BuilderPage() {
   const [peakPose, setPeakPose] = useState<string | undefined>(undefined);
   const [dates, setDates] = useState<TeachEntry[]>([]);
   const [createdAt, setCreatedAt] = useState("");
-  const [loaded, setLoaded] = useState(isNew);
+  const [loaded, setLoaded] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
+
+  // After the first save of a new sequence, mint a permanent URL.
+  const redirectedRef = useRef(false);
 
   // Builder state
   const [sections, setSections] = useState<Section[]>([]);
   const [addPoseTarget, setAddPoseTarget] = useState<{ sectionId: string; insertAfterPoseId?: string } | null>(null);
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
 
-  /** Always keep a trailing empty section so there's always one ready to use. */
-  const ensureTrailingEmpty = (secs: Section[]): Section[] => {
-    const last = secs[secs.length - 1];
-    if (!last || last.poses.length > 0) {
-      return [...secs, { id: generateId(), title: "New section", secondSide: false, poses: [] }];
-    }
-    return secs;
-  };
-
-  /** Wrapper around setSections that maintains the trailing-empty invariant. */
+  /** Wrapper around setSections for consistency with section/pose mutations. */
   const updateSections = (updater: Section[] | ((prev: Section[]) => Section[])) => {
     setSections((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      return ensureTrailingEmpty(next);
+      return typeof updater === "function" ? updater(prev) : updater;
     });
   };
 
@@ -1462,7 +1495,16 @@ export default function BuilderPage() {
     if (isNew) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCreatedAt(new Date().toISOString());
-      setSections(ensureTrailingEmpty([]));
+      const openingPose = getPoseMeta("Child's Pose");
+      setSections([{
+        id: generateId(),
+        title: "Class opening",
+        secondSide: false,
+        poses: openingPose
+          ? [normalizePoseItem({ id: generateId(), pose: openingPose.pose, duration: openingPose.duration, minutes: openingPose.minutes })]
+          : [],
+      }]);
+      setLoaded(true);
       return;
     }
     const record = loadSequence(id);
@@ -1472,23 +1514,28 @@ export default function BuilderPage() {
       setPeakPose(record.peakPose);
       setDates(record.dates ?? []);
       setCreatedAt(record.createdAt);
-      setSections(ensureTrailingEmpty(record.sections));
+      setSections(record.sections);
       setShowAnalysis(record.showAnalysis ?? false);
     } else {
-      setName("Sequence not found");
       setCreatedAt(new Date().toISOString());
-      setSections(ensureTrailingEmpty([]));
+      setSections([{ id: generateId(), title: "New section", secondSide: false, poses: [] }]);
     }
     setLoaded(true);
   }, [id, isNew]);
 
-  // Autosave: debounced 800ms on any meaningful change
+  // Autosave: debounced 800ms on any meaningful change.
+  // For brand-new sequences, waits until there's real content before saving,
+  // then mints a permanent URL so reloading doesn't spin up another blank.
   useEffect(() => {
     if (!loaded) return;
+    // For new sequences, only start saving once the user has explicitly set
+    // a name or theme — pre-loaded default poses don't count.
+    const hasContent = name.trim() !== "" || theme.trim() !== "";
+    if (isNew && !hasContent) return;
     const timer = setTimeout(() => {
       saveSequence({
         id: sequenceId,
-        name: name.trim() || "Untitled sequence",
+        name: name.trim(),
         theme: theme.trim() || undefined,
         peakPose: peakPose || undefined,
         dates,
@@ -1497,8 +1544,13 @@ export default function BuilderPage() {
         sections,
         showAnalysis,
       });
+      if (isNew && !redirectedRef.current) {
+        redirectedRef.current = true;
+        router.replace(`/sequence/${sequenceId}`);
+      }
     }, 800);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections, name, theme, peakPose, dates, loaded, sequenceId, createdAt, showAnalysis]);
 
 
@@ -1527,6 +1579,17 @@ export default function BuilderPage() {
       [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
       return next;
     });
+  };
+
+  const addSection = () => {
+    setSections((prev) => [
+      ...prev,
+      { id: generateId(), title: "New section", secondSide: false, poses: [] },
+    ]);
+  };
+
+  const deleteSection = (sectionId: string) => {
+    setSections((prev) => prev.filter((s) => s.id !== sectionId));
   };
 
   /** Nudge a pose one slot up/down, hopping into the adjacent non-empty section at the ends. */
@@ -1763,7 +1826,6 @@ export default function BuilderPage() {
   };
 
   const addPoseTargetSection = sections.find((s) => s.id === addPoseTarget?.sectionId);
-  const lastNonEmptyIdx = sections.reduce((last, s, i) => s.poses.length > 0 ? i : last, -1);
 
   const hasPoses = sections.some((s) => s.poses.length > 0);
   const totalMinutes = sections.reduce(
@@ -1779,10 +1841,18 @@ export default function BuilderPage() {
   // ── Name editing ─────────────────────────────────────────────────────────
 
   const startEditingName = () => { setNameDraft(name); setEditingName(true); };
-  const saveName = () => { setName(nameDraft.trim() || "Untitled sequence"); setEditingName(false); };
+  const saveName = () => { setName(nameDraft.trim()); setEditingName(false); };
 
   const startEditingTheme = () => { setThemeDraft(theme); setEditingTheme(true); };
-  const saveTheme = () => { setTheme(themeDraft); setEditingTheme(false); };
+  const saveTheme = () => {
+    setTheme(themeDraft);
+    setEditingTheme(false);
+    // Auto-fill name from theme when name is still blank
+    if (!name.trim() && themeDraft.trim()) {
+      const derived = autoNameFromTheme(themeDraft);
+      if (derived) setName(derived);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#e8e3da] px-6 py-12 text-stone-800">
@@ -1903,17 +1973,22 @@ export default function BuilderPage() {
           <div className="py-16 text-center text-sm text-stone-400">Loading…</div>
         ) : (
           <>
+            <div className="mb-5 flex items-baseline justify-between gap-4">
+              <span className="font-display text-lg font-light tracking-tight text-stone-800">
+                Plan your sequence
+              </span>
+              {hasPoses && (
+                <p className="text-[10px] text-stone-400">
+                  Tap a chip to expand. Thicker border = saved cue.
+                </p>
+              )}
+            </div>
+
             {showAnalysis && hasPoses && (
               <SequenceAuditPanel report={auditReport} onAction={handleAuditAction} />
             )}
 
             {showAnalysis && <EnergyArc sections={sections} />}
-
-            {hasPoses && (
-              <p className="mb-3 text-[10px] text-stone-400">
-                Tap a chip to expand. Thicker border = saved cue.
-              </p>
-            )}
 
             <div className="space-y-3">
               {sections.map((section, sectionIdx) => (
@@ -1925,7 +2000,7 @@ export default function BuilderPage() {
                   firstPoseId={firstPoseId}
                   lastPoseId={lastPoseId}
                   canMoveUp={sectionIdx > 0}
-                  canMoveDown={sectionIdx < lastNonEmptyIdx}
+                  canMoveDown={sectionIdx < sections.length - 1}
                   onUpdateTitle={updateSectionTitle}
                   onToggleSecondSide={toggleSecondSide}
                   onUpdateRounds={updateSectionRounds}
@@ -1936,9 +2011,22 @@ export default function BuilderPage() {
                   onMoveSection={(dir) => moveSection(section.id, dir)}
                   onMovePose={movePose}
                   onRemovePose={removePose}
+                  onDeleteSection={() => deleteSection(section.id)}
                 />
               ))}
             </div>
+
+            <button
+              type="button"
+              onClick={addSection}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-stone-200 py-3 text-sm text-stone-400 transition hover:border-stone-300 hover:text-stone-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0">
+                <circle cx="10" cy="10" r="7.5" />
+                <path strokeLinecap="round" d="M10 7v6M7 10h6" />
+              </svg>
+              Add section
+            </button>
           </>
         )}
         </div>
