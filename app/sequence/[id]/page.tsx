@@ -45,6 +45,7 @@ import {
   type PoseMeta,
 } from "@/lib/poses";
 import { searchPoses } from "@/lib/pose-matcher";
+import { abbreviatePose } from "@/lib/pose-abbreviations";
 import { BulkPoseEntry } from "@/components/bulk-pose-entry";
 import {
   computePeakReadiness,
@@ -1490,6 +1491,332 @@ function TeachingLog({
   );
 }
 
+// ─── Compact section block ───────────────────────────────────────────────────
+
+function CompactSectionBlock({
+  section,
+  peakPoseId,
+  peakReadiness,
+  firstPoseId,
+  lastPoseId,
+  onUpdateTitle,
+  onToggleSecondSide,
+  onUpdateRounds,
+  onUpdateCue,
+  onUpdateBreaths,
+  onAddPose,
+  onAddPoseBelow,
+  onMovePose,
+  onRemovePose,
+}: {
+  section: Section;
+  peakPoseId: string | null;
+  peakReadiness: PeakReadiness | null;
+  firstPoseId: string | null;
+  lastPoseId: string | null;
+  onUpdateTitle: (id: string, title: string) => void;
+  onToggleSecondSide: (id: string) => void;
+  onUpdateRounds: (id: string, rounds: number) => void;
+  onUpdateCue: (poseId: string, cue: string) => void;
+  onUpdateBreaths: (poseId: string, breaths: number) => void;
+  onAddPose: (id: string) => void;
+  onAddPoseBelow: (sectionId: string, afterPoseId: string) => void;
+  onMovePose: (sectionId: string, poseId: string, dir: -1 | 1) => void;
+  onRemovePose: (sectionId: string, poseId: string) => void;
+}) {
+  const [openPoseId, setOpenPoseId] = useState<string | null>(null);
+  const [sectionSettingsOpen, setSectionSettingsOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [detailMenuOpen, setDetailMenuOpen] = useState(false);
+  const detailMenuRef = useRef<HTMLDivElement>(null);
+
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+    id: section.id,
+  });
+
+  useEffect(() => {
+    if (!detailMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (detailMenuRef.current && !detailMenuRef.current.contains(e.target as Node))
+        setDetailMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [detailMenuOpen]);
+
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  const rounds = section.rounds ?? 1;
+
+  const startEditingTitle = () => { setTitleDraft(section.title); setEditingTitle(true); };
+  const saveTitle = () => {
+    onUpdateTitle(section.id, titleDraft.trim() || "Section");
+    setEditingTitle(false);
+  };
+
+  const toggleChip = (poseId: string) => {
+    setOpenPoseId((prev) => (prev === poseId ? null : poseId));
+    setDetailMenuOpen(false);
+  };
+
+  const openPose = section.poses.find((p) => p.id === openPoseId) ?? null;
+
+  return (
+    <article
+      ref={setNodeRef}
+      style={style}
+      className="rounded-2xl border border-stone-200 bg-white/80 px-4 py-3 shadow-[0_1px_1px_rgba(0,0,0,0.03)]"
+    >
+      {/* Row: drag handle + title + badges + chips + add */}
+      <div className="flex items-start gap-x-2 gap-y-1.5">
+        {/* Drag handle */}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="mt-1 touch-none select-none cursor-grab shrink-0 text-stone-300 active:cursor-grabbing"
+          aria-label={`Drag section ${section.title}`}
+        >
+          :::
+        </button>
+
+        {/* Title + badges — top-left anchored */}
+        <div className="shrink-0 w-28 flex flex-col gap-0.5 pt-0.5">
+          {editingTitle ? (
+            <input
+              type="text"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveTitle();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
+              autoFocus
+              className="w-full bg-transparent font-display text-sm text-stone-700 focus:outline-none"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={startEditingTitle}
+              className="text-left font-display text-sm text-stone-600 hover:text-stone-800 truncate"
+            >
+              {section.title}
+            </button>
+          )}
+          {section.poses.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSectionSettingsOpen((v) => !v)}
+              className="flex flex-wrap gap-1 rounded-md px-0.5 -mx-0.5 hover:bg-stone-100/80 transition-colors"
+              aria-label="Section settings"
+            >
+              <span className={`rounded-full px-1.5 py-0 text-[10px] font-medium ${sectionSettingsOpen ? "bg-stone-200 text-stone-600" : "bg-stone-100 text-stone-500"}`}>
+                ×{rounds}
+              </span>
+              {section.secondSide && (
+                <span className={`rounded-full px-1.5 py-0 text-[10px] ${sectionSettingsOpen ? "bg-stone-200 text-stone-500" : "bg-stone-100 text-stone-400"}`}>
+                  ⇄
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Chips + add button */}
+        <div className="flex flex-1 flex-wrap gap-1 items-center">
+          {section.poses.map((pose) => {
+            const isPeak = pose.id === peakPoseId;
+            const hasCue = Boolean(pose.cue);
+            const isOpen = pose.id === openPoseId;
+            return (
+              <button
+                key={pose.id}
+                type="button"
+                onClick={() => toggleChip(pose.id)}
+                className={[
+                  "rounded-full px-2.5 py-0.5 text-xs leading-5 transition-all",
+                  isPeak
+                    ? "bg-amber-50 text-amber-800"
+                    : "bg-stone-100 text-stone-700",
+                  hasCue
+                    ? isPeak
+                      ? "border-2 border-amber-300"
+                      : "border-2 border-stone-300"
+                    : isPeak
+                      ? "border border-amber-200"
+                      : "border border-stone-200",
+                  isOpen ? "ring-1 ring-stone-400 ring-offset-1" : "",
+                ].join(" ")}
+              >
+                {abbreviatePose(pose.pose)}
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => onAddPose(section.id)}
+            className="rounded-full border border-dashed border-stone-200 px-2 py-0.5 text-xs text-stone-300 leading-5 transition hover:border-stone-300 hover:text-stone-500"
+            aria-label="Add pose to section"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      {/* Section settings panel */}
+      {sectionSettingsOpen && section.poses.length > 0 && (
+        <div className="mt-2 flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-2.5">
+          <span className="text-xs text-stone-400">Rounds</span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onUpdateRounds(section.id, Math.max(1, rounds - 1))}
+              disabled={rounds <= 1}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-200/60 disabled:pointer-events-none disabled:opacity-30"
+            >
+              −
+            </button>
+            <span className="min-w-[2rem] text-center text-sm tabular-nums font-medium text-stone-700">
+              ×{rounds}
+            </span>
+            <button
+              type="button"
+              onClick={() => onUpdateRounds(section.id, Math.min(6, rounds + 1))}
+              disabled={rounds >= 6}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-stone-500 transition hover:bg-stone-200/60 disabled:pointer-events-none disabled:opacity-30"
+            >
+              +
+            </button>
+          </div>
+          <div className="mx-1 h-4 w-px bg-stone-200" />
+          <button
+            type="button"
+            onClick={() => onToggleSecondSide(section.id)}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              section.secondSide
+                ? "bg-stone-800 text-white"
+                : "border border-stone-200 bg-white text-stone-400 hover:border-stone-300 hover:text-stone-600"
+            }`}
+          >
+            {section.secondSide && (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 shrink-0">
+                <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" />
+              </svg>
+            )}
+            Both sides
+          </button>
+        </div>
+      )}
+
+      {/* Inline detail panel */}
+      {openPose && (
+        <div className="mt-2 rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-stone-800">
+                {openPose.pose}
+                {openPose.id === peakPoseId && (
+                  <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                    <span aria-hidden>△</span> Peak
+                  </span>
+                )}
+              </p>
+              {(() => {
+                const m = getPoseMeta(openPose.pose);
+                return m?.sanskrit ? (
+                  <p className="text-[11px] italic text-stone-400">{m.sanskrit}</p>
+                ) : null;
+              })()}
+              <div className="mt-1">
+                <PoseCueField
+                  cue={openPose.cue}
+                  compact
+                  onSave={(cue) => onUpdateCue(openPose.id, cue)}
+                />
+              </div>
+              {openPose.id === peakPoseId && peakReadiness && (
+                <PeakReadinessNote readiness={peakReadiness} onAddPrep={() => {}} />
+              )}
+            </div>
+
+            {/* Right rail */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <BreathsControl
+                breaths={openPose.breaths ?? 5}
+                holdMode={openPose.holdMode ?? false}
+                onChange={(b) => onUpdateBreaths(openPose.id, b)}
+              />
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => onMovePose(section.id, openPose.id, -1)}
+                  disabled={openPose.id === firstPoseId}
+                  aria-label={`Move ${openPose.pose} up`}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600 disabled:pointer-events-none disabled:opacity-25"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                    <path fillRule="evenodd" d="M8 3.5a.75.75 0 0 1 .53.22l4 4a.75.75 0 0 1-1.06 1.06L8 5.31 4.53 8.78a.75.75 0 0 1-1.06-1.06l4-4A.75.75 0 0 1 8 3.5Z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMovePose(section.id, openPose.id, 1)}
+                  disabled={openPose.id === lastPoseId}
+                  aria-label={`Move ${openPose.pose} down`}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600 disabled:pointer-events-none disabled:opacity-25"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                    <path fillRule="evenodd" d="M8 12.5a.75.75 0 0 1-.53-.22l-4-4a.75.75 0 0 1 1.06-1.06L8 10.69l3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-.53.22Z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                <div ref={detailMenuRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setDetailMenuOpen((v) => !v)}
+                    aria-label={`More actions for ${openPose.pose}`}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
+                      <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
+                    </svg>
+                  </button>
+                  {detailMenuOpen && (
+                    <div className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => { onAddPoseBelow(section.id, openPose.id); setDetailMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-700 transition hover:bg-stone-50"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3.5 w-3.5 shrink-0">
+                          <circle cx="8" cy="8" r="6" />
+                          <path strokeLinecap="round" d="M8 5.5v5M5.5 8h5" />
+                        </svg>
+                        Add pose below
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { onRemovePose(section.id, openPose.id); setOpenPoseId(null); setDetailMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 shrink-0">
+                          <path fillRule="evenodd" d="M6.5 1.75a.25.25 0 0 1 .25-.25h2.5a.25.25 0 0 1 .25.25V3h-3V1.75ZM11 3V1.75A1.75 1.75 0 0 0 9.25 0h-2.5A1.75 1.75 0 0 0 5 1.75V3H2.5a.75.75 0 0 0 0 1.5h.75v8.75A1.75 1.75 0 0 0 5 15h6a1.75 1.75 0 0 0 1.75-1.75V4.5h.75a.75.75 0 0 0 0-1.5H11ZM6.75 6.5a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 1.5 0v-5Zm4 0a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 1.5 0v-5Z" clipRule="evenodd" />
+                        </svg>
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 export default function BuilderPage() {
@@ -2014,20 +2341,22 @@ export default function BuilderPage() {
 
             {showAnalysis && <EnergyArc sections={sections} />}
 
+            {hasPoses && (
+              <p className="mb-3 text-[10px] text-stone-400">
+                Tap a chip to expand. Thicker border = saved cue.
+              </p>
+            )}
+
             <SortableContext items={sectionIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
                 {sections.map((section) => (
-                  <SortableSectionBlock
+                  <CompactSectionBlock
                     key={section.id}
                     section={section}
-                    isCollapsed={isSectionCollapsed(section.id)}
-                    showAnalysis={showAnalysis}
-                    missingPrereqsMap={missingPrereqsMap}
                     peakPoseId={peakPoseId}
                     peakReadiness={peakReadiness}
                     firstPoseId={firstPoseId}
                     lastPoseId={lastPoseId}
-                    onToggleCollapse={toggleSectionCollapse}
                     onUpdateTitle={updateSectionTitle}
                     onToggleSecondSide={toggleSecondSide}
                     onUpdateRounds={updateSectionRounds}
@@ -2035,8 +2364,6 @@ export default function BuilderPage() {
                     onUpdateBreaths={updatePoseBreaths}
                     onAddPose={(id) => setAddPoseTarget({ sectionId: id })}
                     onAddPoseBelow={(sectionId, afterPoseId) => setAddPoseTarget({ sectionId, insertAfterPoseId: afterPoseId })}
-                    onApplyTemplate={applyTemplate}
-                    onAddPrep={handleAddPrep}
                     onMovePose={movePose}
                     onRemovePose={removePose}
                   />
@@ -2060,11 +2387,10 @@ export default function BuilderPage() {
         {/* Footer */}
         <footer className="mt-8">
           <div className="rounded-2xl bg-white/80 px-5 py-4 text-sm text-stone-600 ring-1 ring-stone-200/70">
-            <p className="text-stone-600">
-              About <span className="font-display text-base text-stone-800">{formatMinutes(totalMinutes)}</span> on the mat
-            </p>
-            <p className="mt-1 text-xs text-stone-400">
-              ~5s per breath in flows, ~8s in holds, ~12s in deep holds
+            <p className="text-stone-500">
+              {hasPoses
+                ? `~${Math.max(5, Math.round(totalMinutes / 5) * 5)}-min class structure`
+                : "Add poses to estimate class time"}
             </p>
           </div>
         </footer>

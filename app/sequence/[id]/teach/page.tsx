@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { loadSequence, formatBreathEstimate, type SequenceRecord } from "@/lib/sequences";
-import { getBodyRegionClasses } from "@/lib/poses";
 import {
   buildTeachSteps,
   groupIntoPasses,
@@ -12,7 +11,13 @@ import {
   type TeachPass,
 } from "@/lib/teach";
 
-function formatMinutes(minutes: number) {
+/** Round to nearest 5 min, formatted as "~30-min class structure". */
+function approxClassTime(minutes: number): string {
+  const rounded = Math.max(5, Math.round(minutes / 5) * 5);
+  return `~${rounded}-min class structure`;
+}
+
+function formatPassMinutes(minutes: number) {
   const whole = Math.floor(minutes);
   const secs = Math.round((minutes - whole) * 60);
   if (secs === 0) return `${whole} min`;
@@ -23,7 +28,6 @@ function formatMinutes(minutes: number) {
 /** Keep the screen awake while the teach view is open; release on leave. */
 function useWakeLock() {
   useEffect(() => {
-    // Wake Lock isn't universally supported; degrade quietly when absent.
     const nav = navigator as Navigator & {
       wakeLock?: { request: (type: "screen") => Promise<WakeLockSentinelLike> };
     };
@@ -40,7 +44,6 @@ function useWakeLock() {
       }
     };
 
-    // Re-acquire when returning to the tab (the lock drops on visibility loss).
     const onVisibility = () => {
       if (document.visibilityState === "visible" && !released) acquire();
     };
@@ -65,8 +68,6 @@ function PoseRow({
   breaths,
   holdMode,
   cue,
-  modifications,
-  accentDot,
 }: {
   pose: string;
   sanskrit?: string;
@@ -74,52 +75,68 @@ function PoseRow({
   breaths?: number;
   holdMode?: boolean;
   cue?: string;
-  modifications?: string[];
-  accentDot?: string;
 }) {
   return (
-    <li className="flex items-start gap-4 py-5">
-      {accentDot && (
-        <span
-          aria-hidden
-          className={`mt-2.5 h-2.5 w-2.5 shrink-0 rounded-full ${accentDot}`}
-        />
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-4">
-          <h3 className="text-2xl font-medium leading-snug text-stone-900">
-            {pose}
-            {sanskrit && (
-              <span className="ml-2 text-base font-normal italic text-stone-400">
-                {sanskrit}
-              </span>
-            )}
-          </h3>
-          {breaths !== undefined ? (
-            <div className="shrink-0 text-right">
-              <p className="text-base tabular-nums text-stone-700">
-                {breaths} breath{breaths === 1 ? "" : "s"}
-              </p>
-              <p className="text-sm tabular-nums text-stone-400">
-                {formatBreathEstimate(breaths, holdMode ?? false)}
-              </p>
-            </div>
-          ) : (
-            <span className="shrink-0 text-base tabular-nums text-stone-500">
-              {duration}
+    <li className="py-5">
+      <div className="flex items-start justify-between gap-4">
+        <h3 className="text-2xl font-medium leading-snug text-stone-900">
+          {pose}
+          {sanskrit && (
+            <span className="ml-2 text-base font-normal italic text-stone-400">
+              {sanskrit}
             </span>
           )}
-        </div>
-        {cue && (
-          <p className="mt-2 text-lg leading-relaxed text-stone-600">{cue}</p>
-        )}
-        {modifications && modifications.length > 0 && (
-          <p className="mt-1.5 text-sm leading-relaxed text-stone-400">
-            {modifications.join(" · ")}
-          </p>
+        </h3>
+        {breaths !== undefined ? (
+          <div className="shrink-0 text-right">
+            <p className="text-base tabular-nums text-stone-700">
+              {breaths} breath{breaths === 1 ? "" : "s"}
+            </p>
+            <p className="text-sm tabular-nums text-stone-400">
+              {formatBreathEstimate(breaths, holdMode ?? false)}
+            </p>
+          </div>
+        ) : (
+          <span className="shrink-0 text-base tabular-nums text-stone-500">
+            {duration}
+          </span>
         )}
       </div>
+      {cue && (
+        <p className="mt-2 text-lg leading-relaxed text-stone-600">{cue}</p>
+      )}
     </li>
+  );
+}
+
+function SectionStrip({ passes }: { passes: TeachPass[] }) {
+  const sections = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const pass of passes) {
+      if (!seen.has(pass.sectionTitle)) {
+        seen.add(pass.sectionTitle);
+        result.push(pass.sectionTitle);
+      }
+    }
+    return result;
+  }, [passes]);
+
+  if (sections.length === 0) return null;
+
+  return (
+    <div className="mb-8 flex flex-wrap gap-1.5">
+      {sections.map((title, i) => (
+        <span key={title} className="flex items-center gap-1.5">
+          <span className="rounded-full border border-stone-300/70 bg-white/60 px-3 py-1 text-sm text-stone-600">
+            {title}
+          </span>
+          {i < sections.length - 1 && (
+            <span className="text-stone-300 text-xs" aria-hidden>›</span>
+          )}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -138,28 +155,21 @@ function RunningOrder({ passes }: { passes: TeachPass[] }) {
               )}
             </h2>
             <span className="shrink-0 text-xs tabular-nums text-stone-400">
-              {formatMinutes(pass.minutes)}
+              {formatPassMinutes(pass.minutes)}
             </span>
           </div>
           <ul className="divide-y divide-stone-300/40">
-            {pass.steps.map((step) => {
-              const accent = step.bodyRegion
-                ? getBodyRegionClasses(step.bodyRegion).dot
-                : undefined;
-              return (
-                <PoseRow
-                  key={step.id}
-                  pose={step.pose}
-                  sanskrit={step.sanskrit}
-                  duration={step.duration}
-                  breaths={step.breaths}
-                  holdMode={step.holdMode}
-                  cue={step.cue}
-                  modifications={step.modifications}
-                  accentDot={accent}
-                />
-              );
-            })}
+            {pass.steps.map((step) => (
+              <PoseRow
+                key={step.id}
+                pose={step.pose}
+                sanskrit={step.sanskrit}
+                duration={step.duration}
+                breaths={step.breaths}
+                holdMode={step.holdMode}
+                cue={step.cue}
+              />
+            ))}
           </ul>
         </section>
       ))}
@@ -234,7 +244,7 @@ export default function TeachPage() {
                   </span>
                 )}
                 {!isEmpty && (
-                  <span className="tabular-nums">{formatMinutes(totalMinutes)} total</span>
+                  <span>{approxClassTime(totalMinutes)}</span>
                 )}
               </div>
             </header>
@@ -251,6 +261,7 @@ export default function TeachPage() {
               </div>
             ) : (
               <div className="mt-8">
+                <SectionStrip passes={passes} />
                 <RunningOrder passes={passes} />
               </div>
             )}
