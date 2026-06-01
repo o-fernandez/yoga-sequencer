@@ -10,6 +10,14 @@ import {
   duplicateSequence,
   type SequenceRecord,
 } from "@/lib/sequences";
+import {
+  exportBackup,
+  parseBackupFile,
+  applyImport,
+  getLastBackupAt,
+  formatLastBackup,
+  type ImportPreview,
+} from "@/lib/backup";
 import { getPoseIllustration } from "@/lib/pose-illustrations";
 
 function formatDate(iso: string): string {
@@ -377,6 +385,140 @@ function EmptyState() {
   );
 }
 
+function ImportModal({
+  preview,
+  onConfirm,
+  onCancel,
+}: {
+  preview: ImportPreview;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const parts: string[] = [];
+  if (preview.toAdd > 0) parts.push(`add ${preview.toAdd} sequence${preview.toAdd === 1 ? "" : "s"}`);
+  if (preview.toUpdate > 0) parts.push(`update ${preview.toUpdate}`);
+  const summary = parts.length > 0 ? parts.join(" and ") : "no changes";
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-sm">
+      <div className="mx-6 w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 shadow-xl">
+        <p className="font-display text-base font-medium text-stone-800">Restore from backup?</p>
+        <p className="mt-2 text-sm text-stone-500">
+          This will {summary}. Nothing you currently have will be deleted.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-full px-4 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 transition hover:bg-stone-700"
+          >
+            Restore
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function BackupFooter({ onImported }: { onImported: () => void }) {
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setLastBackup(getLastBackupAt());
+  }, []);
+
+  const stale = (() => {
+    if (!lastBackup) return true;
+    const days = (Date.now() - new Date(lastBackup).getTime()) / 86_400_000;
+    return days >= 14;
+  })();
+
+  const handleExport = () => {
+    exportBackup();
+    setLastBackup(new Date().toISOString());
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const result = parseBackupFile(ev.target?.result as string);
+        setError(null);
+        setPreview(result);
+      } catch {
+        setError("That doesn't look like a backup file.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirm = () => {
+    if (!preview) return;
+    applyImport(preview.records);
+    setPreview(null);
+    onImported();
+  };
+
+  return (
+    <>
+      {preview && (
+        <ImportModal
+          preview={preview}
+          onConfirm={handleConfirm}
+          onCancel={() => setPreview(null)}
+        />
+      )}
+      <div className="mt-10 border-t border-stone-300/50 pt-4">
+        <div className="flex items-center justify-between gap-4">
+          <span className={`text-[13px] ${stale ? "text-amber-700/70" : "text-stone-400"}`}>
+            {formatLastBackup(lastBackup)}
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleExport}
+              className="text-[13px] text-stone-400 transition hover:text-stone-600"
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={() => { setError(null); fileRef.current?.click(); }}
+              className="text-[13px] text-stone-400 transition hover:text-stone-600"
+            >
+              Import
+            </button>
+          </div>
+        </div>
+        {error && (
+          <p className="mt-2 text-[12px] text-rose-500">{error}</p>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </div>
+    </>
+  );
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const [sequences, setSequences] = useState<SequenceRecord[]>([]);
@@ -441,6 +583,11 @@ export default function LibraryPage() {
     setSequences((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
+  const reloadSequences = useCallback(() => {
+    const all = loadSequences();
+    setSequences([...all].sort((a, b) => sortKey(b).localeCompare(sortKey(a))));
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#e8e3da] px-6 py-12 text-stone-800">
       <main className="mx-auto w-full max-w-2xl">
@@ -489,6 +636,8 @@ export default function LibraryPage() {
             </div>
           </>
         )}
+
+        {loaded && <BackupFooter onImported={reloadSequences} />}
       </main>
 
       {selectionMode && (

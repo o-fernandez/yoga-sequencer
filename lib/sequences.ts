@@ -107,7 +107,7 @@ export function generateId(): string {
 
 /** Migrate a record: handle old schemas and normalize all pose items. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function migrate(raw: any): SequenceRecord {
+export function migrateRecord(raw: any): SequenceRecord {
   let record: SequenceRecord;
   if (Array.isArray(raw.dates) && raw.dates.length > 0 && typeof raw.dates[0] === "object") {
     // Already TeachEntry[]
@@ -323,7 +323,7 @@ export function loadSequences(): SequenceRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      const seeded = SEED_SEQUENCES.map(migrate);
+      const seeded = SEED_SEQUENCES.map(migrateRecord);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
       localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
       return seeded;
@@ -337,7 +337,7 @@ export function loadSequences(): SequenceRecord[] {
       records = [...SEED_SEQUENCES, ...records];
       localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
     }
-    const migrated = records.map(migrate);
+    const migrated = records.map(migrateRecord);
     // Write back if migration changed anything
     if (JSON.stringify(records) !== JSON.stringify(migrated) || storedVersion < SEEDS_VERSION) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
