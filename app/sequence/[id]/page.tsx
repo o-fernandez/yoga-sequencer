@@ -1902,12 +1902,6 @@ export default function BuilderPage() {
               )}
             </div>
 
-            {showAnalysis && hasPoses && (
-              <SequenceAuditPanel report={auditReport} onAction={handleAuditAction} />
-            )}
-
-            {showAnalysis && <EnergyArc sections={sections} />}
-
             <div className="space-y-3">
               {sections.map((section, sectionIdx) => (
                 <CompactSectionBlock
@@ -1945,6 +1939,12 @@ export default function BuilderPage() {
               </svg>
               Add section
             </button>
+
+            {showAnalysis && hasPoses && (
+              <SequenceAuditPanel report={auditReport} onAction={handleAuditAction} />
+            )}
+
+            {showAnalysis && <EnergyArc sections={sections} />}
           </>
         )}
         </div>
