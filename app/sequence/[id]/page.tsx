@@ -15,6 +15,7 @@ import {
   type PoseItem,
   type Section,
   type TeachEntry,
+  type ThemeType,
 } from "@/lib/sequences";
 import { SECTION_TEMPLATES, sectionFromTemplate } from "@/lib/section-templates";
 import {
@@ -620,6 +621,170 @@ function AddPoseModal({
   );
 }
 
+
+// ─── Theme Intention Field ───────────────────────────────────────────────────
+
+const SEASON_TRADITIONAL = ['Spring', 'Summer', 'Fall', 'Winter'];
+const SEASON_AYURVEDIC = ['Vata', 'Kapha', 'Pitta'];
+
+const CHAKRA_OPTIONS = [
+  '1 · Muladhara (root)',
+  '2 · Svadhisthana (sacral)',
+  '3 · Manipura (solar plexus)',
+  '4 · Anahata (heart)',
+  '5 · Vishuddha (throat)',
+  '6 · Ajna (third eye)',
+  '7 · Sahasrara (crown)',
+];
+
+const MERIDIAN_OPTIONS = [
+  'Lung', 'Large Intestine', 'Stomach', 'Spleen', 'Heart',
+  'Small Intestine', 'Bladder', 'Kidney', 'Pericardium',
+  'Triple Warmer', 'Gallbladder', 'Liver',
+];
+
+const CHIP_LABELS: Record<ThemeType, string> = {
+  season: 'Season',
+  'peak-pose': 'Peak pose',
+  chakra: 'Chakra',
+  meridian: 'Meridian',
+  custom: 'Custom',
+};
+const CHIP_ORDER: ThemeType[] = ['season', 'peak-pose', 'chakra', 'meridian', 'custom'];
+
+const SEASON_KEYWORDS = ['spring', 'summer', 'fall', 'winter', 'autumn', 'vata', 'kapha', 'pitta', 'season', 'solstice', 'equinox'];
+const PEAK_KEYWORDS = ['hip', 'backbend', 'inversion', 'twist', 'arm balance', 'wheel', 'bird', 'pigeon', 'warrior', 'triangle', 'bow', 'camel', 'crow'];
+const CHAKRA_KEYWORDS = ['chakra', 'muladhara', 'svadhisthana', 'manipura', 'anahata', 'vishuddha', 'ajna', 'sahasrara', 'root', 'sacral', 'solar plexus', 'third eye', 'crown'];
+const MERIDIAN_KEYWORDS = ['meridian', 'liver', 'kidney', 'bladder', 'spleen', 'gallbladder', 'pericardium', 'triple warmer'];
+
+function suggestThemeType(text: string): ThemeType | null {
+  const lower = text.toLowerCase();
+  if (SEASON_KEYWORDS.some((k) => lower.includes(k))) return 'season';
+  if (CHAKRA_KEYWORDS.some((k) => lower.includes(k))) return 'chakra';
+  if (MERIDIAN_KEYWORDS.some((k) => lower.includes(k))) return 'meridian';
+  if (PEAK_KEYWORDS.some((k) => lower.includes(k))) return 'peak-pose';
+  return null;
+}
+
+function ThemeIntentionField({
+  theme, onThemeChange, onThemeBlur,
+  themeType, onThemeTypeChange,
+  themeSub, onThemeSubChange,
+  peakPose, onPeakPoseChange,
+}: {
+  theme: string;
+  onThemeChange: (v: string) => void;
+  onThemeBlur: () => void;
+  themeType: ThemeType | undefined;
+  onThemeTypeChange: (v: ThemeType | undefined) => void;
+  themeSub: string | undefined;
+  onThemeSubChange: (v: string | undefined) => void;
+  peakPose: string | undefined;
+  onPeakPoseChange: (v: string | undefined) => void;
+}) {
+  const suggestion = !themeType && theme.trim() ? suggestThemeType(theme) : null;
+
+  const toggleChip = (chip: ThemeType) => {
+    onThemeTypeChange(chip === themeType ? undefined : chip);
+  };
+
+  return (
+    <div className="mb-4">
+      <input
+        type="text"
+        value={theme}
+        onChange={(e) => onThemeChange(e.target.value)}
+        onBlur={onThemeBlur}
+        placeholder="add a theme or intention…"
+        className="w-full bg-transparent font-display text-base font-light italic text-stone-500 placeholder:text-stone-300 focus:outline-none"
+      />
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {CHIP_ORDER.map((chip) => (
+          <button
+            key={chip}
+            type="button"
+            onClick={() => toggleChip(chip)}
+            className={`rounded-full border px-3 py-1 text-xs transition ${
+              chip === themeType
+                ? 'border-violet-300 bg-violet-100 text-violet-700'
+                : suggestion === chip && !themeType
+                  ? 'border-violet-200 bg-violet-50 text-violet-500'
+                  : 'border-stone-200 bg-stone-50/60 text-stone-500 hover:border-stone-300 hover:text-stone-700'
+            }`}
+          >
+            {CHIP_LABELS[chip]}
+          </button>
+        ))}
+      </div>
+      {suggestion && (
+        <p className="mt-1.5 text-xs italic text-stone-400">
+          Looks like:{' '}
+          <button
+            type="button"
+            onClick={() => onThemeTypeChange(suggestion)}
+            className="underline hover:text-stone-600"
+          >
+            {CHIP_LABELS[suggestion]}
+          </button>
+        </p>
+      )}
+      {themeType && themeType !== 'custom' && (
+        <div className="mt-2.5 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
+          {themeType === 'season' && (
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-violet-400">Season</label>
+              <select
+                value={themeSub ?? ''}
+                onChange={(e) => onThemeSubChange(e.target.value || undefined)}
+                className="w-full rounded-lg border border-violet-200/60 bg-white px-3 py-2 text-sm text-stone-700 focus:border-violet-300 focus:outline-none"
+              >
+                <option value="">Select a season…</option>
+                <optgroup label="Traditional">
+                  {SEASON_TRADITIONAL.map((s) => <option key={s}>{s}</option>)}
+                </optgroup>
+                <optgroup label="Ayurvedic">
+                  {SEASON_AYURVEDIC.map((s) => <option key={s}>{s}</option>)}
+                </optgroup>
+              </select>
+            </div>
+          )}
+          {themeType === 'peak-pose' && (
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-violet-400">Peak pose</label>
+              <PeakPosePicker value={peakPose} onChange={onPeakPoseChange} />
+            </div>
+          )}
+          {themeType === 'chakra' && (
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-violet-400">Chakra</label>
+              <select
+                value={themeSub ?? ''}
+                onChange={(e) => onThemeSubChange(e.target.value || undefined)}
+                className="w-full rounded-lg border border-violet-200/60 bg-white px-3 py-2 text-sm text-stone-700 focus:border-violet-300 focus:outline-none"
+              >
+                <option value="">Select a chakra…</option>
+                {CHAKRA_OPTIONS.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          {themeType === 'meridian' && (
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-violet-400">Meridian</label>
+              <select
+                value={themeSub ?? ''}
+                onChange={(e) => onThemeSubChange(e.target.value || undefined)}
+                className="w-full rounded-lg border border-violet-200/60 bg-white px-3 py-2 text-sm text-stone-700 focus:border-violet-300 focus:outline-none"
+              >
+                <option value="">Select a meridian…</option>
+                {MERIDIAN_OPTIONS.map((m) => <option key={m}>{m}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PeakPosePicker({
   value,
@@ -1277,8 +1442,8 @@ export default function BuilderPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [theme, setTheme] = useState("");
-  const [editingTheme, setEditingTheme] = useState(false);
-  const [themeDraft, setThemeDraft] = useState("");
+  const [themeType, setThemeType] = useState<ThemeType | undefined>(undefined);
+  const [themeSub, setThemeSub] = useState<string | undefined>(undefined);
   const [peakPose, setPeakPose] = useState<string | undefined>(undefined);
   const [dates, setDates] = useState<TeachEntry[]>([]);
   const [notes, setNotes] = useState("");
@@ -1314,6 +1479,9 @@ export default function BuilderPage() {
     if (record) {
       setName(record.name);
       setTheme(record.theme ?? "");
+      // Migrate: existing sequences with a peakPose but no themeType get the chip auto-selected
+      setThemeType(record.themeType ?? (record.peakPose ? 'peak-pose' : undefined));
+      setThemeSub(record.themeSub);
       setPeakPose(record.peakPose);
       setNotes(record.notes ?? "");
       setDates(record.dates ?? []);
@@ -1341,6 +1509,8 @@ export default function BuilderPage() {
         id: sequenceId,
         name: name.trim(),
         theme: theme.trim() || undefined,
+        themeType: themeType || undefined,
+        themeSub: themeSub || undefined,
         peakPose: peakPose || undefined,
         notes: notes.trim() || undefined,
         dates,
@@ -1356,7 +1526,7 @@ export default function BuilderPage() {
     }, 800);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, name, theme, peakPose, notes, dates, loaded, sequenceId, createdAt, showAnalysis]);
+  }, [sections, name, theme, themeType, themeSub, peakPose, notes, dates, loaded, sequenceId, createdAt, showAnalysis]);
 
 
   // ── Section/pose handlers ────────────────────────────────────────────────
@@ -1617,15 +1787,17 @@ export default function BuilderPage() {
   const startEditingName = () => { setNameDraft(name); setEditingName(true); };
   const saveName = () => { setName(nameDraft.trim()); setEditingName(false); };
 
-  const startEditingTheme = () => { setThemeDraft(theme); setEditingTheme(true); };
-  const saveTheme = () => {
-    setTheme(themeDraft);
-    setEditingTheme(false);
-    // Auto-fill name from theme when name is still blank
-    if (!name.trim() && themeDraft.trim()) {
-      const derived = autoNameFromTheme(themeDraft);
+  const handleThemeBlur = () => {
+    if (!name.trim() && theme.trim()) {
+      const derived = autoNameFromTheme(theme);
       if (derived) setName(derived);
     }
+  };
+
+  const handleThemeTypeChange = (newType: ThemeType | undefined) => {
+    setThemeType(newType);
+    setThemeSub(undefined);
+    if (newType !== 'peak-pose') setPeakPose(undefined);
   };
 
   return (
@@ -1719,39 +1891,18 @@ export default function BuilderPage() {
             )}
           </div>
 
-          {/* Theme — elevated as identity subtitle */}
-          <div className="mb-4">
-            {editingTheme ? (
-              <input
-                type="text"
-                value={themeDraft}
-                onChange={(e) => setThemeDraft(e.target.value)}
-                onBlur={saveTheme}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveTheme();
-                  if (e.key === "Escape") setEditingTheme(false);
-                }}
-                autoFocus
-                placeholder="add a theme or intention…"
-                className="w-full bg-transparent font-display text-base font-light italic text-stone-500 placeholder:text-stone-300 focus:outline-none"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={startEditingTheme}
-                className={`text-left font-display text-base font-light italic transition hover:text-stone-500 ${
-                  theme ? "text-stone-400" : "text-stone-300"
-                }`}
-              >
-                {theme || "add a theme or intention…"}
-              </button>
-            )}
-          </div>
-
-          {/* Peak pose */}
-          <div className="flex items-center gap-2">
-            <PeakPosePicker value={peakPose} onChange={setPeakPose} />
-          </div>
+          {/* Theme + intention type */}
+          <ThemeIntentionField
+            theme={theme}
+            onThemeChange={setTheme}
+            onThemeBlur={handleThemeBlur}
+            themeType={themeType}
+            onThemeTypeChange={handleThemeTypeChange}
+            themeSub={themeSub}
+            onThemeSubChange={setThemeSub}
+            peakPose={peakPose}
+            onPeakPoseChange={setPeakPose}
+          />
         </header>
 
         {/* Teaching Log — anchor of the record, above the structural detail */}

@@ -66,10 +66,14 @@ export type TeachEntry = {
   notes?: string;
 };
 
+export type ThemeType = 'season' | 'peak-pose' | 'chakra' | 'meridian' | 'custom';
+
 export type SequenceRecord = {
   id: string;
   name: string;
   theme?: string;
+  themeType?: ThemeType;
+  themeSub?: string;
   peakPose?: string;
   notes?: string;
   /**

@@ -9,6 +9,7 @@ import {
   deleteSequence,
   duplicateSequence,
   type SequenceRecord,
+  type ThemeType,
 } from "@/lib/sequences";
 import {
   exportBackup,
@@ -19,6 +20,16 @@ import {
   type ImportPreview,
 } from "@/lib/backup";
 import { getPoseIllustration } from "@/lib/pose-illustrations";
+
+const AYURVEDIC_SEASONS = ['Vata', 'Kapha', 'Pitta'];
+
+function formatThemeSubLabel(themeType: ThemeType, themeSub: string): string {
+  if (themeType === 'season') {
+    return AYURVEDIC_SEASONS.includes(themeSub) ? `${themeSub} season` : themeSub;
+  }
+  if (themeType === 'meridian') return `${themeSub} meridian`;
+  return themeSub;
+}
 
 function formatDate(iso: string): string {
   // Parse as local noon to avoid timezone off-by-one
@@ -302,6 +313,12 @@ function SequenceCard({
               <span className="text-stone-400">Untitled class</span>
             )}
           </h2>
+          {sequence.themeType && sequence.themeSub &&
+           sequence.themeType !== 'peak-pose' && sequence.themeType !== 'custom' && (
+            <p className="mt-0.5 text-[12px] italic text-stone-400">
+              {formatThemeSubLabel(sequence.themeType, sequence.themeSub)}
+            </p>
+          )}
           {hasAnyDate && (
             <p className="mt-1.5 text-[13px] text-stone-500">
               {formatDate(displayDate!)}
