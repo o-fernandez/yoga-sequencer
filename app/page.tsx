@@ -313,8 +313,7 @@ function SequenceCard({
               <span className="text-stone-400">Untitled class</span>
             )}
           </h2>
-          {sequence.themeType && sequence.themeSub &&
-           sequence.themeType !== 'peak-pose' && sequence.themeType !== 'custom' && (
+          {sequence.themeType && sequence.themeSub && sequence.themeType !== 'custom' && (
             <p className="mt-0.5 text-[12px] italic text-stone-400">
               {formatThemeSubLabel(sequence.themeType, sequence.themeSub)}
             </p>
@@ -348,7 +347,7 @@ function SequenceCard({
             </div>
           )}
         </div>
-        {/* Class highlight block — right-anchored, always visible */}
+        {/* Class highlight block — right-anchored */}
         {sequence.peakPose && (
           <div className="flex w-16 shrink-0 flex-col items-center rounded-xl border border-stone-200/80 bg-stone-50 px-2 py-2.5 text-center">
             {getPoseIllustration(sequence.peakPose, "w-9 h-9 text-stone-600")}

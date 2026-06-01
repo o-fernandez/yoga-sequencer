@@ -645,15 +645,13 @@ const MERIDIAN_OPTIONS = [
 
 const CHIP_LABELS: Record<ThemeType, string> = {
   season: 'Season',
-  'peak-pose': 'Peak pose',
   chakra: 'Chakra',
   meridian: 'Meridian',
   custom: 'Custom',
 };
-const CHIP_ORDER: ThemeType[] = ['season', 'peak-pose', 'chakra', 'meridian', 'custom'];
+const CHIP_ORDER: ThemeType[] = ['season', 'chakra', 'meridian', 'custom'];
 
 const SEASON_KEYWORDS = ['spring', 'summer', 'fall', 'winter', 'autumn', 'vata', 'kapha', 'pitta', 'season', 'solstice', 'equinox'];
-const PEAK_KEYWORDS = ['hip', 'backbend', 'inversion', 'twist', 'arm balance', 'wheel', 'bird', 'pigeon', 'warrior', 'triangle', 'bow', 'camel', 'crow'];
 const CHAKRA_KEYWORDS = ['chakra', 'muladhara', 'svadhisthana', 'manipura', 'anahata', 'vishuddha', 'ajna', 'sahasrara', 'root', 'sacral', 'solar plexus', 'third eye', 'crown'];
 const MERIDIAN_KEYWORDS = ['meridian', 'liver', 'kidney', 'bladder', 'spleen', 'gallbladder', 'pericardium', 'triple warmer'];
 
@@ -662,7 +660,6 @@ function suggestThemeType(text: string): ThemeType | null {
   if (SEASON_KEYWORDS.some((k) => lower.includes(k))) return 'season';
   if (CHAKRA_KEYWORDS.some((k) => lower.includes(k))) return 'chakra';
   if (MERIDIAN_KEYWORDS.some((k) => lower.includes(k))) return 'meridian';
-  if (PEAK_KEYWORDS.some((k) => lower.includes(k))) return 'peak-pose';
   return null;
 }
 
@@ -670,7 +667,6 @@ function ThemeIntentionField({
   theme, onThemeChange, onThemeBlur,
   themeType, onThemeTypeChange,
   themeSub, onThemeSubChange,
-  peakPose, onPeakPoseChange,
 }: {
   theme: string;
   onThemeChange: (v: string) => void;
@@ -679,8 +675,6 @@ function ThemeIntentionField({
   onThemeTypeChange: (v: ThemeType | undefined) => void;
   themeSub: string | undefined;
   onThemeSubChange: (v: string | undefined) => void;
-  peakPose: string | undefined;
-  onPeakPoseChange: (v: string | undefined) => void;
 }) {
   const suggestion = !themeType && theme.trim() ? suggestThemeType(theme) : null;
 
@@ -748,12 +742,6 @@ function ThemeIntentionField({
               </select>
             </div>
           )}
-          {themeType === 'peak-pose' && (
-            <div>
-              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-violet-400">Peak pose</label>
-              <PeakPosePicker value={peakPose} onChange={onPeakPoseChange} />
-            </div>
-          )}
           {themeType === 'chakra' && (
             <div>
               <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-violet-400">Chakra</label>
@@ -786,7 +774,68 @@ function ThemeIntentionField({
   );
 }
 
-function PeakPosePicker({
+function PosePicker({
+  value,
+  onChange,
+  onClose,
+}: {
+  value?: string;
+  onChange: (pose: string | undefined) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  const visiblePoses = search.trim() ? searchPoses(search.trim()) : allPoses;
+
+  return (
+    <div ref={ref} className="absolute left-0 top-full z-20 mt-1 flex max-h-72 w-72 flex-col rounded-xl border border-stone-200 bg-white shadow-lg">
+      <div className="p-2">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search poses…"
+          autoFocus
+          className="w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
+        />
+      </div>
+      <div className="overflow-y-auto p-2 pt-0">
+        {visiblePoses.length === 0 ? (
+          <p className="px-3 py-3 text-center text-sm text-stone-400">No poses found</p>
+        ) : (
+          visiblePoses.map((p) => (
+            <button
+              key={p.pose}
+              type="button"
+              onClick={() => { onChange(p.pose); onClose(); setSearch(""); }}
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition ${
+                p.pose === value
+                  ? "bg-[#e8e3da] font-medium text-stone-900"
+                  : "text-stone-700 hover:bg-stone-50"
+              }`}
+            >
+              <span>{p.pose}</span>
+              {p.sanskrit && (
+                <span className="truncate text-[11px] italic text-stone-400">{p.sanskrit}</span>
+              )}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PeakPoseField({
   value,
   onChange,
 }: {
@@ -794,83 +843,58 @@ function PeakPosePicker({
   onChange: (pose: string | undefined) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  const visiblePoses = search.trim() ? searchPoses(search.trim()) : allPoses;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const meta = value ? allPoses.find((p) => p.pose === value) : undefined;
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition ${
-          value
-            ? "border-stone-300 bg-white text-stone-800"
-            : "border-stone-200 bg-white text-stone-400 hover:border-stone-300"
-        }`}
-      >
-        <span>{value ?? "Select peak pose…"}</span>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 shrink-0 text-stone-400">
-          <path fillRule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 flex max-h-72 w-72 flex-col rounded-xl border border-stone-200 bg-white shadow-lg">
-          <div className="p-2">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search poses…"
-              autoFocus
-              className="w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
-            />
+    <div className="mt-4">
+      <div className="mb-1.5 flex items-center gap-2">
+        <hr className="flex-1 border-stone-200/70" />
+        <span className="text-[10px] font-medium uppercase tracking-widest text-stone-400">Peak pose</span>
+        <hr className="flex-1 border-stone-200/70" />
+      </div>
+      <div ref={containerRef} className="relative">
+        {value ? (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50/60 px-3 py-1.5 text-sm text-stone-700 transition hover:border-amber-300 hover:bg-amber-50"
+            >
+              <span aria-hidden className="text-amber-500 text-xs leading-none">△</span>
+              <span className="font-medium">{value}</span>
+              {meta?.sanskrit && (
+                <span className="text-[11px] italic text-stone-400">{meta.sanskrit}</span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(undefined)}
+              aria-label="Remove peak pose"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+              </svg>
+            </button>
           </div>
-          <div className="overflow-y-auto p-2 pt-0">
-            {value && (
-              <button
-                type="button"
-                onClick={() => { onChange(undefined); setOpen(false); }}
-                className="mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-stone-500 hover:bg-stone-50"
-              >
-                <span className="text-stone-400">✕</span> Clear selection
-              </button>
-            )}
-            {visiblePoses.length === 0 ? (
-              <p className="px-3 py-3 text-center text-sm text-stone-400">No poses found</p>
-            ) : (
-              visiblePoses.map((p) => (
-                <button
-                  key={p.pose}
-                  type="button"
-                  onClick={() => { onChange(p.pose); setOpen(false); setSearch(""); }}
-                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition ${
-                    p.pose === value
-                      ? "bg-[#e8e3da] font-medium text-stone-900"
-                      : "text-stone-700 hover:bg-stone-50"
-                  }`}
-                >
-                  <span>{p.pose}</span>
-                  {p.sanskrit && (
-                    <span className="truncate text-[11px] italic text-stone-400">{p.sanskrit}</span>
-                  )}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="text-sm text-stone-400 transition hover:text-stone-600"
+          >
+            Select pose…
+          </button>
+        )}
+        {open && (
+          <PosePicker
+            value={value}
+            onChange={onChange}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -1479,9 +1503,10 @@ export default function BuilderPage() {
     if (record) {
       setName(record.name);
       setTheme(record.theme ?? "");
-      // Migrate: existing sequences with a peakPose but no themeType get the chip auto-selected
-      setThemeType(record.themeType ?? (record.peakPose ? 'peak-pose' : undefined));
-      setThemeSub(record.themeSub);
+      // Migrate: 'peak-pose' themeType is no longer a chip; treat as unset
+      const isLegacyPeakType = (record.themeType as string) === 'peak-pose';
+      setThemeType(isLegacyPeakType ? undefined : record.themeType);
+      setThemeSub(isLegacyPeakType ? undefined : record.themeSub);
       setPeakPose(record.peakPose);
       setNotes(record.notes ?? "");
       setDates(record.dates ?? []);
@@ -1797,7 +1822,6 @@ export default function BuilderPage() {
   const handleThemeTypeChange = (newType: ThemeType | undefined) => {
     setThemeType(newType);
     setThemeSub(undefined);
-    if (newType !== 'peak-pose') setPeakPose(undefined);
   };
 
   return (
@@ -1900,9 +1924,9 @@ export default function BuilderPage() {
             onThemeTypeChange={handleThemeTypeChange}
             themeSub={themeSub}
             onThemeSubChange={setThemeSub}
-            peakPose={peakPose}
-            onPeakPoseChange={setPeakPose}
           />
+          {/* Peak pose — independent of intention type */}
+          <PeakPoseField value={peakPose} onChange={setPeakPose} />
         </header>
 
         {/* Teaching Log — anchor of the record, above the structural detail */}
