@@ -20,6 +20,12 @@ import {
   type ImportPreview,
 } from "@/lib/backup";
 import { getPoseIllustration } from "@/lib/pose-illustrations";
+import {
+  loadInspirations,
+  saveInspiration,
+  deleteInspiration,
+  type InspirationEntry,
+} from "@/lib/inspirations";
 
 const AYURVEDIC_SEASONS = ['Vata', 'Kapha', 'Pitta'];
 
@@ -361,6 +367,152 @@ function SequenceCard({
   );
 }
 
+function InspirationCard({
+  entry,
+  onOpen,
+}: {
+  entry: InspirationEntry;
+  onOpen: () => void;
+}) {
+  const excerpt = entry.note.trim().slice(0, 100) + (entry.note.trim().length > 100 ? "…" : "");
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); }
+      }}
+      onClick={onOpen}
+      className="cursor-pointer select-none touch-pan-y rounded-2xl border border-purple-200/60 bg-purple-50/70 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur-sm transition [-webkit-touch-callout:none] hover:bg-purple-50/90 hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+    >
+      <p className="text-[13px] text-purple-700/70">
+        {formatDate(entry.date)}
+        {entry.source && (
+          <>
+            <span className="mx-1.5 text-purple-300">·</span>
+            {entry.source}
+          </>
+        )}
+      </p>
+      <p className="mt-2 text-[14px] italic leading-relaxed text-stone-700">
+        {excerpt}
+      </p>
+    </article>
+  );
+}
+
+function InspirationSheet({
+  entry,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  entry?: InspirationEntry;
+  onSave: (saved: InspirationEntry) => void;
+  onDelete?: () => void;
+  onClose: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [note, setNote] = useState(entry?.note ?? "");
+  const [source, setSource] = useState(entry?.source ?? "");
+  const [date, setDate] = useState(entry?.date ?? today);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isEdit = !!entry;
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  const handleSave = () => {
+    if (!note.trim()) return;
+    const now = new Date().toISOString();
+    const saved: InspirationEntry = {
+      id: entry?.id ?? crypto.randomUUID(),
+      note: note.trim(),
+      source: source.trim() || undefined,
+      date,
+      createdAt: entry?.createdAt ?? now,
+      updatedAt: now,
+    };
+    saveInspiration(saved);
+    onSave(saved);
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/40 backdrop-blur-sm sm:items-center"
+      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-lg rounded-t-3xl border border-stone-200 bg-white px-6 pb-8 pt-6 shadow-xl sm:rounded-3xl">
+        <div className="mb-5 flex items-center justify-between">
+          <p className="font-display text-base font-medium text-stone-800">
+            {isEdit ? "Edit inspiration" : "New inspiration"}
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-600"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
+              <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+            </svg>
+          </button>
+        </div>
+
+        <textarea
+          ref={textareaRef}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="What caught your attention…"
+          rows={6}
+          className="w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-[15px] leading-relaxed text-stone-800 placeholder:text-stone-400 focus:border-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-200"
+        />
+
+        <div className="mt-3 flex gap-3">
+          <input
+            type="text"
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            placeholder="Source (e.g. Sheri's class)"
+            className="min-w-0 flex-1 rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-[14px] text-stone-800 placeholder:text-stone-400 focus:border-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-200"
+          />
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-[14px] text-stone-700 focus:border-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-200"
+          />
+        </div>
+
+        <div className="mt-5 flex items-center justify-between">
+          {isEdit && onDelete ? (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="text-[13px] text-rose-500 transition hover:text-rose-700"
+            >
+              Delete
+            </button>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!note.trim()}
+            className="rounded-full bg-stone-800 px-5 py-2 text-sm font-medium text-stone-100 transition hover:bg-stone-700 disabled:opacity-40"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function SelectionBar({
   count,
   onDuplicate,
@@ -413,6 +565,21 @@ function EmptyState() {
       >
         Create your first sequence
       </Link>
+    </div>
+  );
+}
+
+function InspirationsEmptyState({ onNew }: { onNew: () => void }) {
+  return (
+    <div className="rounded-3xl border border-dashed border-purple-200 bg-purple-50/40 px-8 py-16 text-center">
+      <p className="text-sm text-stone-500">No inspirations yet.</p>
+      <button
+        type="button"
+        onClick={onNew}
+        className="mt-4 inline-block rounded-full border border-purple-200 bg-white px-5 py-2.5 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-purple-50"
+      >
+        Capture your first
+      </button>
     </div>
   );
 }
@@ -556,6 +723,10 @@ export default function LibraryPage() {
   const [sequences, setSequences] = useState<SequenceRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<"classes" | "inspirations">("classes");
+  const [inspirations, setInspirations] = useState<InspirationEntry[]>([]);
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [editingInspiration, setEditingInspiration] = useState<InspirationEntry | null>(null);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -563,12 +734,21 @@ export default function LibraryPage() {
     const reload = () => {
       const all = loadSequences();
       setSequences([...all].sort((a, b) => sortKey(b).localeCompare(sortKey(a))));
+      setInspirations(
+        [...loadInspirations()].sort((a, b) => b.date.localeCompare(a.date))
+      );
       setLoaded(true);
     };
     reload();
     // Re-read when the tab regains focus (catches back-navigation from router cache)
     window.addEventListener("focus", reload);
     return () => window.removeEventListener("focus", reload);
+  }, []);
+
+  const reloadInspirations = useCallback(() => {
+    setInspirations(
+      [...loadInspirations()].sort((a, b) => b.date.localeCompare(a.date))
+    );
   }, []);
 
   const toggleSelect = (id: string) => {
@@ -620,56 +800,125 @@ export default function LibraryPage() {
     setSequences([...all].sort((a, b) => sortKey(b).localeCompare(sortKey(a))));
   }, []);
 
+  const handleInspirationSaved = useCallback((saved: InspirationEntry) => {
+    setInspirations((prev) => {
+      const without = prev.filter((e) => e.id !== saved.id);
+      return [saved, ...without].sort((a, b) => b.date.localeCompare(a.date));
+    });
+    setCaptureOpen(false);
+    setEditingInspiration(null);
+  }, []);
+
+  const handleInspirationDeleted = useCallback((id: string) => {
+    deleteInspiration(id);
+    setInspirations((prev) => prev.filter((e) => e.id !== id));
+    setEditingInspiration(null);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#e8e3da] px-6 py-12 text-stone-800">
       <main className="mx-auto w-full max-w-2xl">
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-stone-500">Yoga Flow</p>
-            <h1 className="mt-2 text-4xl font-light tracking-tight text-stone-900">
-              Your Sequences
-            </h1>
+        <header className="mb-8">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.2em] text-stone-500">Yoga Flow</p>
+              <h1 className="mt-2 text-4xl font-light tracking-tight text-stone-900">
+                Library
+              </h1>
+            </div>
+            <div className="mt-3 flex shrink-0 items-center">
+              {activeTab === "classes" ? (
+                <Link
+                  href="/sequence/new"
+                  className="rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 shadow-sm transition hover:bg-stone-700"
+                >
+                  + New class
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCaptureOpen(true)}
+                  className="rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 shadow-sm transition hover:bg-stone-700"
+                >
+                  + New inspiration
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex shrink-0 items-center sm:mt-3">
-            <Link
-              href="/sequence/new"
-              className="rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 shadow-sm transition hover:bg-stone-700"
+
+          {/* Tabs */}
+          <div className="mt-5 flex gap-1 rounded-full border border-stone-200 bg-stone-100/60 p-1 w-fit">
+            <button
+              type="button"
+              onClick={() => { setActiveTab("classes"); clearSelection(); }}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                activeTab === "classes"
+                  ? "bg-white text-stone-800 shadow-sm"
+                  : "text-stone-500 hover:text-stone-700"
+              }`}
             >
-              + New
-            </Link>
+              Classes
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveTab("inspirations"); clearSelection(); }}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                activeTab === "inspirations"
+                  ? "bg-white text-stone-800 shadow-sm"
+                  : "text-stone-500 hover:text-stone-700"
+              }`}
+            >
+              Inspirations
+            </button>
           </div>
         </header>
 
         {!loaded ? (
           <div className="py-16 text-center text-sm text-stone-400">Loading…</div>
-        ) : sequences.length === 0 ? (
-          <EmptyState />
+        ) : activeTab === "classes" ? (
+          sequences.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <>
+              {selectionMode && (
+                <p className="mb-3 text-xs text-stone-400">
+                  Tap to select · press and hold any card to start
+                </p>
+              )}
+              <div className="space-y-3">
+                {sequences.map((seq) => (
+                  <SequenceCard
+                    key={seq.id}
+                    sequence={seq}
+                    selectionMode={selectionMode}
+                    selected={selectedIds.has(seq.id)}
+                    onOpen={() => router.push(`/sequence/${seq.id}`)}
+                    onToggleSelect={() => toggleSelect(seq.id)}
+                    onEnterSelection={() => enterSelection(seq.id)}
+                    onDuplicate={() => handleDuplicateOne(seq.id)}
+                    onDelete={() => handleDeleteOne(seq.id)}
+                  />
+                ))}
+              </div>
+            </>
+          )
+        ) : inspirations.length === 0 ? (
+          <InspirationsEmptyState onNew={() => setCaptureOpen(true)} />
         ) : (
-          <>
-            {selectionMode && (
-              <p className="mb-3 text-xs text-stone-400">
-                Tap to select · press and hold any card to start
-              </p>
-            )}
-            <div className="space-y-3">
-              {sequences.map((seq) => (
-                <SequenceCard
-                  key={seq.id}
-                  sequence={seq}
-                  selectionMode={selectionMode}
-                  selected={selectedIds.has(seq.id)}
-                  onOpen={() => router.push(`/sequence/${seq.id}`)}
-                  onToggleSelect={() => toggleSelect(seq.id)}
-                  onEnterSelection={() => enterSelection(seq.id)}
-                  onDuplicate={() => handleDuplicateOne(seq.id)}
-                  onDelete={() => handleDeleteOne(seq.id)}
-                />
-              ))}
-            </div>
-          </>
+          <div className="space-y-3">
+            {inspirations.map((entry) => (
+              <InspirationCard
+                key={entry.id}
+                entry={entry}
+                onOpen={() => setEditingInspiration(entry)}
+              />
+            ))}
+          </div>
         )}
 
-        {loaded && <BackupFooter onImported={reloadSequences} />}
+        {loaded && activeTab === "classes" && (
+          <BackupFooter onImported={reloadSequences} />
+        )}
       </main>
 
       {selectionMode && (
@@ -678,6 +927,22 @@ export default function LibraryPage() {
           onDuplicate={handleDuplicateSelected}
           onDelete={handleDeleteSelected}
           onCancel={clearSelection}
+        />
+      )}
+
+      {captureOpen && (
+        <InspirationSheet
+          onSave={handleInspirationSaved}
+          onClose={() => setCaptureOpen(false)}
+        />
+      )}
+
+      {editingInspiration && (
+        <InspirationSheet
+          entry={editingInspiration}
+          onSave={handleInspirationSaved}
+          onDelete={() => handleInspirationDeleted(editingInspiration.id)}
+          onClose={() => setEditingInspiration(null)}
         />
       )}
     </div>
