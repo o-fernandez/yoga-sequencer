@@ -1820,19 +1820,6 @@ export default function BuilderPage() {
             Library
           </Link>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setShowAnalysis((v) => !v)}
-              className={`flex items-center gap-1 text-sm transition ${
-                showAnalysis
-                  ? "font-medium text-stone-700"
-                  : "text-stone-400 hover:text-stone-600"
-              }`}
-            >
-              {showAnalysis && <span className="text-[10px] leading-none">✦</span>}
-              Analysis
-              <span className="text-[10px] leading-none">{showAnalysis ? "↘" : "↗"}</span>
-            </button>
             {hasPoses ? (
               <Link
                 href={`/sequence/${sequenceId}/teach`}
@@ -1895,11 +1882,26 @@ export default function BuilderPage() {
               <span className="font-display text-lg font-light tracking-tight text-stone-800">
                 Plan your sequence
               </span>
-              {hasPoses && (
-                <p className="text-[10px] text-stone-400">
-                  Tap a chip to expand. Thicker border = saved cue.
-                </p>
-              )}
+              <div className="flex items-baseline gap-4">
+                {hasPoses && (
+                  <p className="text-[10px] text-stone-400">
+                    Tap a chip to expand. Thicker border = saved cue.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowAnalysis((v) => !v)}
+                  className={`flex items-center gap-1 text-sm transition ${
+                    showAnalysis
+                      ? "font-medium text-stone-700"
+                      : "text-stone-400 hover:text-stone-600"
+                  }`}
+                >
+                  {showAnalysis && <span className="text-[10px] leading-none">✦</span>}
+                  Analysis
+                  <span className="text-[10px] leading-none">{showAnalysis ? "↘" : "↗"}</span>
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3">
