@@ -664,13 +664,12 @@ function suggestThemeType(text: string): ThemeType | null {
 }
 
 function ThemeIntentionField({
-  theme, onThemeChange, onThemeBlur,
+  theme, onThemeChange,
   themeType, onThemeTypeChange,
   themeSub, onThemeSubChange,
 }: {
   theme: string;
   onThemeChange: (v: string) => void;
-  onThemeBlur: () => void;
   themeType: ThemeType | undefined;
   onThemeTypeChange: (v: ThemeType | undefined) => void;
   themeSub: string | undefined;
@@ -688,9 +687,8 @@ function ThemeIntentionField({
         type="text"
         value={theme}
         onChange={(e) => onThemeChange(e.target.value)}
-        onBlur={onThemeBlur}
-        placeholder="add a theme or intention…"
-        className="w-full bg-transparent font-display text-base font-light italic text-stone-500 placeholder:text-stone-300 focus:outline-none"
+        placeholder="Theme or intention…"
+        className="w-full bg-transparent font-display text-2xl font-light italic text-stone-700 placeholder:text-stone-300 focus:outline-none"
       />
       <div className="mt-2 flex flex-wrap gap-1.5">
         {CHIP_ORDER.map((chip) => (
@@ -882,8 +880,9 @@ function PeakPoseField({
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="text-sm text-stone-400 transition hover:text-stone-600"
+            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-stone-300 px-3 py-1 text-sm text-stone-400 transition hover:border-stone-400 hover:text-stone-600"
           >
+            <span aria-hidden className="text-stone-300 text-xs leading-none">△</span>
             Select pose…
           </button>
         )}
@@ -1462,9 +1461,6 @@ export default function BuilderPage() {
 
   // Sequence metadata
   const [sequenceId] = useState(() => (isNew ? generateId() : id));
-  const [name, setName] = useState("");
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState("");
   const [theme, setTheme] = useState("");
   const [themeType, setThemeType] = useState<ThemeType | undefined>(undefined);
   const [themeSub, setThemeSub] = useState<string | undefined>(undefined);
@@ -1501,7 +1497,6 @@ export default function BuilderPage() {
     }
     const record = loadSequence(id);
     if (record) {
-      setName(record.name);
       setTheme(record.theme ?? "");
       // Migrate: 'peak-pose' themeType is no longer a chip; treat as unset
       const isLegacyPeakType = (record.themeType as string) === 'peak-pose';
@@ -1527,12 +1522,12 @@ export default function BuilderPage() {
     if (!loaded) return;
     // For new sequences, only start saving once the user has explicitly set
     // a name, theme, or notes — pre-loaded default poses don't count.
-    const hasContent = name.trim() !== "" || theme.trim() !== "" || notes.trim() !== "";
+    const hasContent = theme.trim() !== "" || notes.trim() !== "";
     if (isNew && !hasContent) return;
     const timer = setTimeout(() => {
       saveSequence({
         id: sequenceId,
-        name: name.trim(),
+        name: autoNameFromTheme(theme.trim()) || theme.trim().slice(0, 40) || "",
         theme: theme.trim() || undefined,
         themeType: themeType || undefined,
         themeSub: themeSub || undefined,
@@ -1551,7 +1546,7 @@ export default function BuilderPage() {
     }, 800);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, name, theme, themeType, themeSub, peakPose, notes, dates, loaded, sequenceId, createdAt, showAnalysis]);
+  }, [sections, theme, themeType, themeSub, peakPose, notes, dates, loaded, sequenceId, createdAt, showAnalysis]);
 
 
   // ── Section/pose handlers ────────────────────────────────────────────────
@@ -1807,18 +1802,6 @@ export default function BuilderPage() {
     [sections, theme, peakPose],
   );
 
-  // ── Name editing ─────────────────────────────────────────────────────────
-
-  const startEditingName = () => { setNameDraft(name); setEditingName(true); };
-  const saveName = () => { setName(nameDraft.trim()); setEditingName(false); };
-
-  const handleThemeBlur = () => {
-    if (!name.trim() && theme.trim()) {
-      const derived = autoNameFromTheme(theme);
-      if (derived) setName(derived);
-    }
-  };
-
   const handleThemeTypeChange = (newType: ThemeType | undefined) => {
     setThemeType(newType);
     setThemeSub(undefined);
@@ -1886,40 +1869,10 @@ export default function BuilderPage() {
 
         {/* Sequence metadata header */}
         <header className="mb-8">
-          {/* Name */}
-          <div className="mb-1">
-            {editingName ? (
-              <input
-                type="text"
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                onBlur={saveName}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveName();
-                  if (e.key === "Escape") setEditingName(false);
-                }}
-                autoFocus
-                placeholder="Sequence name…"
-                className="w-full bg-transparent font-display text-3xl font-light tracking-tight text-stone-900 placeholder:text-stone-300 focus:outline-none"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={startEditingName}
-                className={`text-left font-display text-3xl font-light tracking-tight transition hover:text-stone-600 ${
-                  name ? "text-stone-900" : "text-stone-300"
-                }`}
-              >
-                {name || "Sequence name…"}
-              </button>
-            )}
-          </div>
-
-          {/* Theme + intention type */}
+          {/* Theme / intention — this is the class title */}
           <ThemeIntentionField
             theme={theme}
             onThemeChange={setTheme}
-            onThemeBlur={handleThemeBlur}
             themeType={themeType}
             onThemeTypeChange={handleThemeTypeChange}
             themeSub={themeSub}
