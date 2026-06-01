@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { loadSequence, formatBreathEstimate, type SequenceRecord } from "@/lib/sequences";
+import { loadSequence, formatBreathEstimate, sortedTaughtEntries, type SequenceRecord } from "@/lib/sequences";
 import {
   buildTeachSteps,
   groupIntoPasses,
@@ -60,6 +60,26 @@ function useWakeLock() {
 }
 
 type WakeLockSentinelLike = { release: () => Promise<void> };
+
+function formatLastTimeDate(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const d = new Date(year, month - 1, day);
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+}
+
+function LastTimeNote({ sequence }: { sequence: SequenceRecord }) {
+  const entry = sortedTaughtEntries(sequence.dates).find((e) => e.notes);
+  if (!entry) return null;
+  return (
+    <div className="mb-8 border-l-2 border-stone-400/40 pl-4">
+      <p className="mb-1 flex items-center gap-1.5 text-xs text-stone-400">
+        <span aria-hidden>↺</span>
+        Last time · {formatLastTimeDate(entry.date)}
+      </p>
+      <p className="text-base italic leading-relaxed text-stone-500">{entry.notes}</p>
+    </div>
+  );
+}
 
 function PoseRow({
   pose,
@@ -261,6 +281,7 @@ export default function TeachPage() {
               </div>
             ) : (
               <div className="mt-8">
+                <LastTimeNote sequence={sequence} />
                 <SectionStrip passes={passes} />
                 <RunningOrder passes={passes} />
               </div>

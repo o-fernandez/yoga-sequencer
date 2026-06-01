@@ -712,12 +712,30 @@ function PeakPosePicker({
 
 // ─── Teaching Log ─────────────────────────────────────────────────────────────
 
+const REFLECTIVE_QUESTIONS = [
+  "What happened that you didn't plan?",
+  "What would you cut next time?",
+  "Where did the time go?",
+  "What landed for the room?",
+  "What did you change in the moment?",
+  "What do you want to remember for next time?",
+  "What felt rushed, and what had space?",
+  "Who was in the room today, and what did they need?",
+];
+
+function reflectivePlaceholder(date: string): string {
+  const n = date.replace(/-/g, "").split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return REFLECTIVE_QUESTIONS[n % REFLECTIVE_QUESTIONS.length];
+}
+
 function NoteEditor({
   initialValue,
   onSave,
+  date,
 }: {
   initialValue: string;
   onSave: (value: string) => void;
+  date: string;
 }) {
   const [draft, setDraft] = useState(initialValue);
   return (
@@ -725,7 +743,7 @@ function NoteEditor({
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => onSave(draft)}
-      placeholder="How did it go? What would you change?"
+      placeholder={reflectivePlaceholder(date)}
       rows={3}
       className="mt-2 w-full resize-none rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 placeholder:text-stone-300 focus:border-stone-400 focus:outline-none"
     />
@@ -794,6 +812,7 @@ function TeachingLog({
         key={entry.date}
         initialValue={entry.notes ?? ""}
         onSave={(val) => updateNotes(entry.date, val)}
+        date={entry.date}
       />
     </div>
   );
@@ -839,7 +858,7 @@ function TeachingLog({
               onKeyDown={(e) => {
                 if (e.key === "Escape") { cancelingRef.current = true; setAddingEntry(false); }
               }}
-              placeholder="How did it go? What would you change?"
+              placeholder={reflectivePlaceholder(entryDate)}
               rows={3}
               className="mt-2 w-full resize-none rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 placeholder:text-stone-300 focus:border-stone-400 focus:outline-none"
             />
