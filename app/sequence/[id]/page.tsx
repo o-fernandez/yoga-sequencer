@@ -1281,6 +1281,7 @@ export default function BuilderPage() {
   const [themeDraft, setThemeDraft] = useState("");
   const [peakPose, setPeakPose] = useState<string | undefined>(undefined);
   const [dates, setDates] = useState<TeachEntry[]>([]);
+  const [notes, setNotes] = useState("");
   const [createdAt, setCreatedAt] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -1305,15 +1306,7 @@ export default function BuilderPage() {
     if (isNew) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCreatedAt(new Date().toISOString());
-      const openingPose = getPoseMeta("Child's Pose");
-      setSections([{
-        id: generateId(),
-        title: "Class opening",
-        secondSide: false,
-        poses: openingPose
-          ? [normalizePoseItem({ id: generateId(), pose: openingPose.pose, duration: openingPose.duration, minutes: openingPose.minutes })]
-          : [],
-      }]);
+      setSections([]);
       setLoaded(true);
       return;
     }
@@ -1322,6 +1315,7 @@ export default function BuilderPage() {
       setName(record.name);
       setTheme(record.theme ?? "");
       setPeakPose(record.peakPose);
+      setNotes(record.notes ?? "");
       setDates(record.dates ?? []);
       setCreatedAt(record.createdAt);
       setSections(record.sections);
@@ -1339,8 +1333,8 @@ export default function BuilderPage() {
   useEffect(() => {
     if (!loaded) return;
     // For new sequences, only start saving once the user has explicitly set
-    // a name or theme — pre-loaded default poses don't count.
-    const hasContent = name.trim() !== "" || theme.trim() !== "";
+    // a name, theme, or notes — pre-loaded default poses don't count.
+    const hasContent = name.trim() !== "" || theme.trim() !== "" || notes.trim() !== "";
     if (isNew && !hasContent) return;
     const timer = setTimeout(() => {
       saveSequence({
@@ -1348,6 +1342,7 @@ export default function BuilderPage() {
         name: name.trim(),
         theme: theme.trim() || undefined,
         peakPose: peakPose || undefined,
+        notes: notes.trim() || undefined,
         dates,
         createdAt: createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -1361,7 +1356,7 @@ export default function BuilderPage() {
     }, 800);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, name, theme, peakPose, dates, loaded, sequenceId, createdAt, showAnalysis]);
+  }, [sections, name, theme, peakPose, notes, dates, loaded, sequenceId, createdAt, showAnalysis]);
 
 
   // ── Section/pose handlers ────────────────────────────────────────────────
@@ -1676,6 +1671,22 @@ export default function BuilderPage() {
             )}
           </div>
         </div>
+
+        {/* Scratch pad — raw notes, first and most prominent */}
+        <div className="mb-6">
+          <label className="mb-2 block text-[11px] font-medium uppercase tracking-widest text-stone-400">
+            Notes &amp; ideas
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="What's on your mind? Poses, transitions, a theme, anything."
+            autoFocus
+            rows={4}
+            className="w-full resize-none rounded-xl border border-stone-200 bg-white/70 px-4 py-3 text-sm leading-relaxed text-stone-700 placeholder:text-stone-300 focus:border-stone-400 focus:outline-none"
+          />
+        </div>
+        <hr className="mb-8 border-stone-200/60" />
 
         {/* Sequence metadata header */}
         <header className="mb-8">

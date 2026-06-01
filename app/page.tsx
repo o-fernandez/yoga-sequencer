@@ -64,6 +64,19 @@ function firstNoteExcerpt(seq: SequenceRecord): string | null {
   return n.length > 80 ? n.slice(0, 77) + "…" : n;
 }
 
+/** First 100 chars of the scratch-pad notes field. */
+function scratchPadExcerpt(seq: SequenceRecord): string | null {
+  if (!seq.notes?.trim()) return null;
+  const n = seq.notes.trim();
+  return n.length > 100 ? n.slice(0, 97) + "…" : n;
+}
+
+/** Auto-name for notes-only entries with no name or theme. */
+function notesAutoName(seq: SequenceRecord): string {
+  const d = new Date(seq.createdAt);
+  return `Notes — ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+}
+
 /**
  * Press-and-hold to long-press, plain tap to click. Distinguishes the two using
  * pointer events so it works for both touch and mouse, and cancels on scroll.
@@ -148,7 +161,8 @@ function SequenceCard({
   onDelete: () => void;
 }) {
   const isLight = isLightweightLog(sequence);
-  const noteExcerpt = firstNoteExcerpt(sequence);
+  const padExcerpt = scratchPadExcerpt(sequence);
+  const noteExcerpt = padExcerpt ?? firstNoteExcerpt(sequence);
   const chips = sectionChips(sequence);
   const today = new Date().toISOString().slice(0, 10);
   const taughtDates = (sequence.dates ?? []).filter((e) => e.date <= today);
@@ -156,7 +170,9 @@ function SequenceCard({
   const nextPlanned = plannedDates[0]?.date;
   const lastTaught = [...taughtDates].sort((a, b) => b.date.localeCompare(a.date))[0]?.date;
   const taughtCount = taughtDates.length;
-  const displayDate = lastTaught ?? nextPlanned ?? null;
+  // For notes-only entries with no teach dates, fall back to creation date
+  const createdDateIso = sequence.createdAt?.slice(0, 10) ?? null;
+  const displayDate = lastTaught ?? nextPlanned ?? (sequence.notes?.trim() ? createdDateIso : null);
   const hasAnyDate = !!displayDate;
   const isPlanned = taughtCount === 0 && !!nextPlanned;
   const status: string | null =
@@ -282,7 +298,7 @@ function SequenceCard({
             className="font-display text-base font-medium leading-snug text-stone-900"
             style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
           >
-            {sequence.theme || sequence.name || (
+            {sequence.theme || sequence.name || (sequence.notes?.trim() ? notesAutoName(sequence) : null) || (
               <span className="text-stone-400">Untitled class</span>
             )}
           </h2>

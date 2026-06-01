@@ -71,6 +71,7 @@ export type SequenceRecord = {
   name: string;
   theme?: string;
   peakPose?: string;
+  notes?: string;
   /**
    * Teaching log: each entry is a date (past or future) with optional notes.
    * Dates in the past = taught; dates in the future = planned.
