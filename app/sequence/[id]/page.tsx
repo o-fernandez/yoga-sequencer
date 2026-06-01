@@ -30,7 +30,6 @@ import { abbreviatePose } from "@/lib/pose-abbreviations";
 import { BulkPoseEntry } from "@/components/bulk-pose-entry";
 import {
   computePeakReadiness,
-  insertPoseBeforePeak,
   type PeakReadiness,
 } from "@/lib/peak-readiness";
 import {
@@ -428,214 +427,6 @@ function SequenceAuditPanel({
         })}
       </div>
     </section>
-  );
-}
-
-function SectionPoseRow({
-  pose,
-  showAnalysis,
-  missingPrereqs,
-  isPeak,
-  peakReadiness,
-  canMoveUp,
-  canMoveDown,
-  onMove,
-  onRemove,
-  onAddPoseBelow,
-  onUpdateCue,
-  onUpdateBreaths,
-  onAddPrep,
-}: {
-  pose: PoseItem;
-  showAnalysis: boolean;
-  missingPrereqs: string[];
-  isPeak: boolean;
-  peakReadiness: PeakReadiness | null;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  onMove: (dir: -1 | 1) => void;
-  onRemove: () => void;
-  onAddPoseBelow: () => void;
-  onUpdateCue: (poseId: string, cue: string) => void;
-  onUpdateBreaths: (poseId: string, breaths: number) => void;
-  onAddPrep: (poseName: string) => void;
-}) {
-  const [showWarning, setShowWarning] = useState(false);
-  const [showMods, setShowMods] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpen]);
-
-  const meta = getPoseMeta(pose.pose);
-  const regionClasses = meta?.bodyRegion ? getBodyRegionClasses(meta.bodyRegion) : null;
-  const bodyChips = meta?.bodyTargets.slice(0, 3) ?? [];
-  const hasMods = (meta?.modifications?.length ?? 0) > 0;
-
-  return (
-    <div
-      className={
-        isPeak
-          ? "rounded-xl border border-amber-300/60 bg-amber-50/50 px-4 py-3 shadow-[0_1px_4px_rgba(180,140,80,0.12)] ring-1 ring-amber-200/60"
-          : `rounded-xl border border-stone-200 px-4 py-3 ${
-              showAnalysis && regionClasses ? regionClasses.gradient : "bg-white"
-            }`
-      }
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <div className="flex min-w-0 items-baseline gap-2">
-              {isPeak && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                  <span aria-hidden>△</span> Peak
-                </span>
-              )}
-              <p className="text-sm text-stone-800">{pose.pose}</p>
-              {meta?.sanskrit && (
-                <span className="truncate text-[11px] italic text-stone-400">{meta.sanskrit}</span>
-              )}
-            </div>
-            {showAnalysis && missingPrereqs.length > 0 && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setShowWarning((v) => !v); }}
-                  className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100/70 text-amber-500 transition hover:bg-amber-100"
-                  aria-label="Prerequisite warning"
-                >
-                  <span className="text-[11px] font-bold leading-none">!</span>
-                </button>
-                {showWarning && (
-                  <div className="absolute left-0 top-7 z-10 w-52 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 shadow-md">
-                    <p className="mb-1 text-[11px] font-medium text-amber-700">
-                      Not yet warmed up
-                    </p>
-                    <p className="text-xs text-amber-800">
-                      {missingPrereqs.map((t) => getBodyTargetLabel(t as Parameters<typeof getBodyTargetLabel>[0])).join(", ")}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          {showAnalysis && bodyChips.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {bodyChips.map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full bg-stone-200/70 px-2 py-0.5 text-[10px] text-stone-500"
-                >
-                  {getBodyTargetLabel(t)}
-                </span>
-              ))}
-            </div>
-          )}
-          <div>
-            <PoseCueField cue={pose.cue} compact onSave={(cue) => onUpdateCue(pose.id, cue)} />
-            {hasMods && (
-              <div className="mt-1.5">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setShowMods((v) => !v); }}
-                  className="text-[10px] text-stone-400 hover:text-stone-600"
-                >
-                  {showMods ? "▾ modifications" : "▸ modifications"}
-                </button>
-                {showMods && (
-                  <ul className="mt-1 space-y-0.5">
-                    {meta!.modifications!.map((mod) => (
-                      <li key={mod} className="text-[11px] italic text-stone-500">· {mod}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {isPeak && peakReadiness && (
-              <PeakReadinessNote readiness={peakReadiness} onAddPrep={onAddPrep} />
-            )}
-          </div>
-        </div>
-
-        {/* Right rail: breaths control + move/remove controls */}
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <BreathsControl
-            breaths={pose.breaths ?? 5}
-            holdMode={pose.holdMode ?? false}
-            onChange={(b) => onUpdateBreaths(pose.id, b)}
-          />
-          <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => onMove(-1)}
-              disabled={!canMoveUp}
-              aria-label={`Move ${pose.pose} up`}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600 disabled:pointer-events-none disabled:opacity-25"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
-                <path fillRule="evenodd" d="M8 3.5a.75.75 0 0 1 .53.22l4 4a.75.75 0 0 1-1.06 1.06L8 5.31 4.53 8.78a.75.75 0 0 1-1.06-1.06l4-4A.75.75 0 0 1 8 3.5Z" clipRule="evenodd" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => onMove(1)}
-              disabled={!canMoveDown}
-              aria-label={`Move ${pose.pose} down`}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600 disabled:pointer-events-none disabled:opacity-25"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
-                <path fillRule="evenodd" d="M8 12.5a.75.75 0 0 1-.53-.22l-4-4a.75.75 0 0 1 1.06-1.06L8 10.69l3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-.53.22Z" clipRule="evenodd" />
-              </svg>
-            </button>
-            <div ref={menuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                aria-label={`More actions for ${pose.pose}`}
-                aria-expanded={menuOpen}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
-                  <path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
-                </svg>
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-8 z-20 w-40 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => { onAddPoseBelow(); setMenuOpen(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-700 transition hover:bg-stone-50"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3.5 w-3.5 shrink-0">
-                      <circle cx="8" cy="8" r="6" />
-                      <path strokeLinecap="round" d="M8 5.5v5M5.5 8h5" />
-                    </svg>
-                    Add pose below
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { onRemove(); setMenuOpen(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 shrink-0">
-                      <path fillRule="evenodd" d="M6.5 1.75a.25.25 0 0 1 .25-.25h2.5a.25.25 0 0 1 .25.25V3h-3V1.75ZM11 3V1.75A1.75 1.75 0 0 0 9.25 0h-2.5A1.75 1.75 0 0 0 5 1.75V3H2.5a.75.75 0 0 0 0 1.5h.75v8.75A1.75 1.75 0 0 0 5 15h6a1.75 1.75 0 0 0 1.75-1.75V4.5h.75a.75.75 0 0 0 0-1.5H11ZM6.75 6.5a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 1.5 0v-5Zm4 0a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 1.5 0v-5Z" clipRule="evenodd" />
-                    </svg>
-                    Remove
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -1481,7 +1272,7 @@ export default function BuilderPage() {
   // Builder state
   const [sections, setSections] = useState<Section[]>([]);
   const [addPoseTarget, setAddPoseTarget] = useState<{ sectionId: string; insertAfterPoseId?: string } | null>(null);
-  const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
+  const [, setCollapsedSectionIds] = useState<string[]>([]);
 
   /** Wrapper around setSections for consistency with section/pose mutations. */
   const updateSections = (updater: Section[] | ((prev: Section[]) => Section[])) => {
@@ -1556,17 +1347,8 @@ export default function BuilderPage() {
 
   // ── Section/pose handlers ────────────────────────────────────────────────
 
-  const isSectionCollapsed = (sectionId: string) =>
-    collapsedSectionIds.includes(sectionId);
-
   const expandSection = (sectionId: string) => {
     setCollapsedSectionIds((prev) => prev.filter((id) => id !== sectionId));
-  };
-
-  const toggleSectionCollapse = (sectionId: string) => {
-    setCollapsedSectionIds((prev) =>
-      prev.includes(sectionId) ? prev.filter((id) => id !== sectionId) : [...prev, sectionId],
-    );
   };
 
   const moveSection = (sectionId: string, dir: -1 | 1) => {
@@ -1708,24 +1490,6 @@ export default function BuilderPage() {
     );
   };
 
-  // Phase 5: compute missing prerequisites per pose
-  const missingPrereqsMap = useMemo(() => {
-    const map = new Map<string, string[]>();
-    const warmedSoFar = new Set<string>();
-    for (const section of sections) {
-      for (const pose of section.poses) {
-        const meta = getPoseMeta(pose.pose);
-        if (meta?.prerequisites?.length) {
-          const missing = meta.prerequisites.filter((p) => !warmedSoFar.has(p));
-          if (missing.length) map.set(pose.id, missing);
-        }
-        // accumulate this pose's targets for subsequent poses
-        meta?.bodyTargets.forEach((t) => warmedSoFar.add(t));
-      }
-    }
-    return map;
-  }, [sections]);
-
   // Peak readiness: does the arc warm up what the peak depends on?
   const peakReadiness = useMemo(
     () => (peakPose ? computePeakReadiness(sections, peakPose) : null),
@@ -1755,10 +1519,6 @@ export default function BuilderPage() {
     }
     return { firstPoseId: first, lastPoseId: last };
   }, [sections]);
-
-  const handleAddPrep = (poseName: string) => {
-    updateSections((prev) => insertPoseBeforePeak(prev, poseName, peakPose));
-  };
 
   const makePoseItem = (poseName: string): PoseItem =>
     normalizePoseItem({ id: generateId(), pose: poseName, duration: "", minutes: 0 });
