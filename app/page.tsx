@@ -37,6 +37,63 @@ function formatThemeSubLabel(themeType: ThemeType, themeSub: string): string {
   return themeSub;
 }
 
+// ─── Theme color system ───────────────────────────────────────────────────────
+
+type ColorStyle = { bg: string; text: string; border: string };
+
+const CHAKRA_COLORS: ColorStyle[] = [
+  { bg: '#FCEBEB', text: '#A32D2D', border: '#F7C1C1' }, // 1 Muladhara
+  { bg: '#FAEEDA', text: '#854F0B', border: '#FAC775' }, // 2 Svadhisthana
+  { bg: '#FAEEDA', text: '#BA7517', border: '#EF9F27' }, // 3 Manipura
+  { bg: '#EAF3DE', text: '#3B6D11', border: '#C0DD97' }, // 4 Anahata
+  { bg: '#E6F1FB', text: '#185FA5', border: '#B5D4F4' }, // 5 Vishuddha
+  { bg: '#EEEDFE', text: '#534AB7', border: '#AFA9EC' }, // 6 Ajna
+  { bg: '#FBEAF0', text: '#993556', border: '#F4C0D1' }, // 7 Sahasrara
+];
+
+const SEASON_GREEN: ColorStyle = { bg: '#E1F5EE', text: '#0F6E56', border: '#9FE1CB' };
+const SEASON_AMBER: ColorStyle = { bg: '#FAEEDA', text: '#854F0B', border: '#FAC775' };
+const SEASON_BLUE: ColorStyle  = { bg: '#E6F1FB', text: '#185FA5', border: '#B5D4F4' };
+
+function chakraColor(themeSub: string): ColorStyle | null {
+  const n = parseInt(themeSub[0]);
+  if (isNaN(n) || n < 1 || n > 7) return null;
+  return CHAKRA_COLORS[n - 1];
+}
+
+function seasonPoseColor(themeSub: string): ColorStyle {
+  if (themeSub === 'Pitta' || themeSub === 'Summer' || themeSub === 'Fall') return SEASON_AMBER;
+  if (themeSub === 'Vata' || themeSub === 'Winter') return SEASON_BLUE;
+  return SEASON_GREEN; // Kapha, Spring
+}
+
+function themeTagStyle(themeType: ThemeType | undefined, themeSub: string | undefined): ColorStyle | null {
+  if (!themeType || !themeSub || themeType === 'custom') return null;
+  if (themeType === 'season') return SEASON_GREEN;
+  if (themeType === 'meridian') return SEASON_GREEN;
+  if (themeType === 'chakra') return chakraColor(themeSub);
+  return null;
+}
+
+function themePoseStyle(themeType: ThemeType | undefined, themeSub: string | undefined): ColorStyle | null {
+  if (!themeType || !themeSub || themeType === 'custom') return null;
+  if (themeType === 'season') return seasonPoseColor(themeSub);
+  if (themeType === 'meridian') return SEASON_GREEN;
+  if (themeType === 'chakra') return chakraColor(themeSub);
+  return null;
+}
+
+function themeTagLabel(themeType: ThemeType, themeSub: string): string {
+  if (themeType === 'season') return formatThemeSubLabel(themeType, themeSub);
+  if (themeType === 'meridian') return themeSub;
+  if (themeType === 'chakra') {
+    // "1 · Muladhara (root)" → "Muladhara · chakra"
+    const name = themeSub.split('·')[1]?.split('(')[0]?.trim() ?? themeSub;
+    return `${name} · chakra`;
+  }
+  return themeSub;
+}
+
 function formatDate(iso: string): string {
   // Parse as local noon to avoid timezone off-by-one
   const d = new Date(`${iso}T12:00:00`);
@@ -187,16 +244,20 @@ function SequenceCard({
   const nextPlanned = plannedDates[0]?.date;
   const lastTaught = [...taughtDates].sort((a, b) => b.date.localeCompare(a.date))[0]?.date;
   const taughtCount = taughtDates.length;
-  // For notes-only entries with no teach dates, fall back to creation date
   const createdDateIso = sequence.createdAt?.slice(0, 10) ?? null;
   const displayDate = lastTaught ?? nextPlanned ?? (sequence.notes?.trim() ? createdDateIso : null);
   const hasAnyDate = !!displayDate;
-  const isPlanned = taughtCount === 0 && !!nextPlanned;
-  const status: string | null =
+
+  const tagStyle = themeTagStyle(sequence.themeType, sequence.themeSub);
+  const poseStyle = themePoseStyle(sequence.themeType, sequence.themeSub);
+
+  const filledDots = Math.min(taughtCount, 5);
+  const firstDotPlanned = taughtCount === 0 && !!nextPlanned;
+  const dotLabel =
     taughtCount === 1 ? "Taught once" :
     taughtCount > 1 ? `Taught ${taughtCount}×` :
-    nextPlanned ? "Planned" :
-    null;
+    nextPlanned ? "Planned · never taught" :
+    "Never taught";
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -319,20 +380,17 @@ function SequenceCard({
               <span className="text-stone-400">Untitled class</span>
             )}
           </h2>
-          {sequence.themeType && sequence.themeSub && sequence.themeType !== 'custom' && (
-            <p className="mt-0.5 text-[12px] italic text-stone-400">
-              {formatThemeSubLabel(sequence.themeType, sequence.themeSub)}
-            </p>
+          {tagStyle && sequence.themeType && sequence.themeSub && (
+            <span
+              className="mt-1.5 inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium leading-none"
+              style={{ backgroundColor: tagStyle.bg, color: tagStyle.text, borderColor: tagStyle.border }}
+            >
+              {themeTagLabel(sequence.themeType, sequence.themeSub)}
+            </span>
           )}
           {hasAnyDate && (
             <p className="mt-1.5 text-[13px] text-stone-500">
               {formatDate(displayDate!)}
-              {status && (
-                <>
-                  <span className="mx-1.5 text-stone-300">·</span>
-                  <span className={isPlanned ? "text-stone-400" : ""}>{status}</span>
-                </>
-              )}
             </p>
           )}
           {noteExcerpt && (
@@ -355,13 +413,38 @@ function SequenceCard({
         </div>
         {/* Class highlight block — right-anchored */}
         {sequence.peakPose && (
-          <div className="flex w-16 shrink-0 flex-col items-center rounded-xl border border-stone-200/80 bg-stone-50 px-2 py-2.5 text-center">
-            {getPoseIllustration(sequence.peakPose, "w-9 h-9 text-stone-600")}
-            <span className="mt-1 break-words text-[11px] font-medium leading-tight text-stone-600">
+          <div
+            className="flex w-16 shrink-0 flex-col items-center rounded-xl border px-2 py-2.5 text-center"
+            style={poseStyle
+              ? { backgroundColor: poseStyle.bg, borderColor: poseStyle.border, color: poseStyle.text }
+              : { backgroundColor: '#f7f6f4', borderColor: 'rgba(214,211,207,0.8)', color: '#57534e' }
+            }
+          >
+            {getPoseIllustration(sequence.peakPose, "w-9 h-9")}
+            <span className="mt-1 break-words text-[11px] font-medium leading-tight">
               {sequence.peakPose}
             </span>
           </div>
         )}
+      </div>
+      {/* Taught history dot row */}
+      <div className="mt-3 flex items-center gap-2 pt-3 border-t border-stone-100">
+        <div className="flex items-center gap-1">
+          {Array.from({ length: 5 }).map((_, i) => {
+            const filled = i < filledDots;
+            const planned = i === 0 && firstDotPlanned;
+            return (
+              <span
+                key={i}
+                className="block h-2 w-2 rounded-full"
+                style={{
+                  backgroundColor: filled ? '#4ade80' : planned ? '#a78bfa' : '#e7e5e4',
+                }}
+              />
+            );
+          })}
+        </div>
+        <span className="text-[11px] text-stone-400">{dotLabel}</span>
       </div>
     </article>
   );

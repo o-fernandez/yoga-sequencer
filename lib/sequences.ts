@@ -102,9 +102,12 @@ export function sortedUpcomingEntries(dates: TeachEntry[]): TeachEntry[] {
 }
 
 const STORAGE_KEY = "yoga-sequences";
-const SEEDS_VERSION = 2;
+const SEEDS_VERSION = 3;
 const SEEDS_VERSION_KEY = "yoga-seeds-version";
-const OLD_SEED_IDS = new Set(["seed-shoulder-opening", "seed-grounding-flow", "seed-hip-opening-45"]);
+const OLD_SEED_IDS = new Set([
+  "seed-shoulder-opening", "seed-grounding-flow", "seed-hip-opening-45", // v1
+  "seed-hip-freedom", "seed-heart-opener", "seed-finding-steadiness",    // v2
+]);
 
 export function generateId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -152,11 +155,13 @@ function p(id: string, pose: string, cue?: string): PoseItem {
 }
 
 const SEED_SEQUENCES: SequenceRecord[] = [
-  // 1 ── Hip freedom: well-worn class taught three times, notes showing evolution
+  // 1 ── Hip freedom: Kapha season, well-worn class taught three times, notes showing evolution
   {
-    id: "seed-hip-freedom",
+    id: "seed-hip-freedom-v3",
     name: "Hip freedom",
     theme: "Creating space where we hold tension",
+    themeType: "season",
+    themeSub: "Kapha",
     peakPose: "Pigeon",
     showAnalysis: false,
     dates: [
@@ -258,14 +263,16 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     ],
   },
 
-  // 2 ── Heart opener: structural sketch, planned for next week
+  // 2 ── Heart opener: Anahata chakra, structural sketch, planned for next week
   {
-    id: "seed-heart-opener",
+    id: "seed-heart-opener-v3",
     name: "Expanding what we can receive",
     theme: "Expanding what we can receive",
+    themeType: "chakra",
+    themeSub: "4 · Anahata (heart)",
     peakPose: "Wheel",
     showAnalysis: false,
-    dates: [{ date: "2026-06-02" }],
+    dates: [{ date: "2026-06-09" }],
     createdAt: "2026-05-29T10:00:00.000Z",
     updatedAt: "2026-05-29T10:00:00.000Z",
     sections: [
@@ -307,11 +314,13 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     ],
   },
 
-  // 3 ── Finding steadiness: quick teaching log, no sections
+  // 3 ── Finding steadiness: Muladhara chakra, quick teaching log entry
   {
-    id: "seed-finding-steadiness",
+    id: "seed-finding-steadiness-v3",
     name: "Finding steadiness",
     theme: "Finding steadiness",
+    themeType: "chakra",
+    themeSub: "1 · Muladhara (root)",
     peakPose: "Eagle",
     showAnalysis: false,
     dates: [
@@ -320,6 +329,40 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     createdAt: "2026-05-27T09:00:00.000Z",
     updatedAt: "2026-05-27T09:00:00.000Z",
     sections: [],
+  },
+
+  // 4 ── Kidney meridian: idea in progress, never taught — shows scratch pad + empty dot row
+  {
+    id: "seed-kidney-meridian-v3",
+    name: "",
+    theme: "Letting go of what we don't need",
+    themeType: "meridian",
+    themeSub: "Kidney",
+    peakPose: "Pigeon",
+    showAnalysis: false,
+    notes: "Want to build around long holds and internal quiet. Maybe open with a 5-min seated meditation instead of the usual floor warm-up. Kidney meridian = will, fear, conservation of energy — let the poses do less, let stillness do more.",
+    dates: [],
+    createdAt: "2026-05-31T08:00:00.000Z",
+    updatedAt: "2026-05-31T08:00:00.000Z",
+    sections: [
+      { id: "km-opening",  title: "Opening meditation", secondSide: false, poses: [] },
+      {
+        id: "km-surya", title: "Slow Surya A", secondSide: false, rounds: 2,
+        poses: [
+          p("km-s-1", "Mountain Pose"),
+          p("km-s-2", "Extended Mountain"),
+          p("km-s-3", "Standing Forward Fold"),
+          p("km-s-4", "Half Lift"),
+          p("km-s-5", "Plank"),
+          p("km-s-6", "Chaturanga"),
+          p("km-s-7", "Upward Dog"),
+          p("km-s-8", "Downward Dog"),
+        ],
+      },
+      { id: "km-standing", title: "Standing", secondSide: true, poses: [] },
+      { id: "km-floor",    title: "Long holds", secondSide: true, poses: [] },
+      { id: "km-close",    title: "Closing",    secondSide: false, poses: [] },
+    ],
   },
 ];
 
