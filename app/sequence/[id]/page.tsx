@@ -58,7 +58,7 @@ function formatMinutes(minutes: number) {
 
 /**
  * Derive a sequence name from a theme string by taking the first 3 content
- * words (skipping stop-words). Falls back to "Untitled sequence".
+ * words (skipping stop-words). Falls back to "Untitled class".
  */
 function autoNameFromTheme(theme: string): string {
   const stop = new Set([
@@ -1830,7 +1830,7 @@ export default function BuilderPage() {
             ) : (
               <span
                 className="cursor-not-allowed rounded-full border border-stone-200 px-4 py-1.5 text-sm font-medium text-stone-300"
-                title="Add a pose to teach this sequence"
+                title="Add a pose to teach this class"
               >
                 Teach
               </span>
@@ -1880,7 +1880,7 @@ export default function BuilderPage() {
           <>
             <div className="mb-5 flex items-baseline justify-between gap-4">
               <span className="font-display text-lg font-light tracking-tight text-stone-800">
-                Plan your sequence
+                Build your flow
               </span>
               <div className="flex items-baseline gap-4">
                 {hasPoses && (

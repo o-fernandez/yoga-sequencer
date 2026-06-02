@@ -641,12 +641,12 @@ function SelectionBar({
 function EmptyState() {
   return (
     <div className="rounded-3xl border border-dashed border-stone-300 bg-white/60 px-8 py-16 text-center">
-      <p className="text-sm text-stone-500">No sequences yet.</p>
+      <p className="text-sm text-stone-500">No classes yet.</p>
       <Link
         href="/sequence/new"
         className="mt-4 inline-block rounded-full border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
       >
-        Create your first sequence
+        Plan your first class
       </Link>
     </div>
   );
@@ -677,7 +677,7 @@ function ImportModal({
   onCancel: () => void;
 }) {
   const parts: string[] = [];
-  if (preview.toAdd > 0) parts.push(`add ${preview.toAdd} sequence${preview.toAdd === 1 ? "" : "s"}`);
+  if (preview.toAdd > 0) parts.push(`add ${preview.toAdd} class${preview.toAdd === 1 ? "" : "es"}`);
   if (preview.toUpdate > 0) parts.push(`update ${preview.toUpdate}`);
   const summary = parts.length > 0 ? parts.join(" and ") : "no changes";
 

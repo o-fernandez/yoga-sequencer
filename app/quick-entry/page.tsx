@@ -34,7 +34,7 @@ export default function QuickEntryPage() {
     const newId = generateId();
     saveSequence({
       id: newId,
-      name: "Quick entry sequence",
+      name: "Quick entry class",
       dates: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -81,7 +81,7 @@ export default function QuickEntryPage() {
               onClick={() => handleCreateSequence(resolved)}
               className="rounded-full bg-stone-800 px-5 py-2.5 text-sm font-medium text-stone-100 shadow-sm transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Create sequence →
+              Build class →
             </button>
           )}
         />
