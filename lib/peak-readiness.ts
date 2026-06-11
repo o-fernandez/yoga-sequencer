@@ -1,5 +1,5 @@
 import { poseLibrary, getPoseMeta, type BodyTarget } from "./poses";
-import { generateId, type PoseItem, type Section } from "./sequences";
+import { generateId, normalizePoseItem, type Section } from "./sequences";
 
 export type PeakReadiness = {
   peak: string;
@@ -82,13 +82,7 @@ export function insertPoseBeforePeak(
   poseName: string,
   peakPose: string | undefined,
 ): Section[] {
-  const meta = getPoseMeta(poseName);
-  const newPose: PoseItem = {
-    id: generateId(),
-    pose: poseName,
-    duration: meta?.duration ?? "1 min",
-    minutes: meta?.minutes ?? 1,
-  };
+  const newPose = normalizePoseItem({ id: generateId(), pose: poseName, duration: "", minutes: 0 });
 
   if (peakPose) {
     for (let si = 0; si < sections.length; si++) {

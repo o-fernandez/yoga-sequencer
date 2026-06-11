@@ -679,6 +679,8 @@ function ImportModal({
   const parts: string[] = [];
   if (preview.toAdd > 0) parts.push(`add ${preview.toAdd} class${preview.toAdd === 1 ? "" : "es"}`);
   if (preview.toUpdate > 0) parts.push(`update ${preview.toUpdate}`);
+  const inspirationCount = preview.inspirationsToAdd + preview.inspirationsToUpdate;
+  if (inspirationCount > 0) parts.push(`restore ${inspirationCount} inspiration${inspirationCount === 1 ? "" : "s"}`);
   const summary = parts.length > 0 ? parts.join(" and ") : "no changes";
 
   return createPortal(
@@ -750,7 +752,7 @@ function BackupFooter({ onImported }: { onImported: () => void }) {
 
   const handleConfirm = () => {
     if (!preview) return;
-    applyImport(preview.records);
+    applyImport(preview);
     setPreview(null);
     onImported();
   };
@@ -1000,7 +1002,7 @@ export default function LibraryPage() {
         )}
 
         {loaded && activeTab === "classes" && (
-          <BackupFooter onImported={reloadSequences} />
+          <BackupFooter onImported={() => { reloadSequences(); reloadInspirations(); }} />
         )}
       </main>
 

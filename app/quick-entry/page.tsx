@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { BulkPoseEntry } from "@/components/bulk-pose-entry";
 import { type PoseMeta } from "@/lib/poses";
-import { generateId, saveSequence, type Section } from "@/lib/sequences";
+import { generateId, normalizePoseItem, saveSequence, type Section } from "@/lib/sequences";
 
 export default function QuickEntryPage() {
   const router = useRouter();
@@ -16,12 +16,9 @@ export default function QuickEntryPage() {
       id: generateId(),
       title: "Quick entry",
       secondSide: false,
-      poses: poses.map((p) => ({
-        id: generateId(),
-        pose: p.pose,
-        duration: p.duration,
-        minutes: p.minutes,
-      })),
+      poses: poses.map((p) =>
+        normalizePoseItem({ id: generateId(), pose: p.pose, duration: "", minutes: 0 })
+      ),
     };
 
     const trailingEmpty: Section = {

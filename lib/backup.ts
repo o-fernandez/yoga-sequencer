@@ -1,20 +1,23 @@
 import { loadSequences, saveSequence, migrateRecord, type SequenceRecord } from "./sequences";
+import { loadInspirations, saveInspiration, type InspirationEntry } from "./inspirations";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const BACKUP_TS_KEY = "yoga-backup-last";
 
 type BackupEnvelope = {
   schemaVersion: number;
   exportedAt: string;
   sequences: SequenceRecord[];
+  /** Added in schema v2; v1 backups won't have it. */
+  inspirations?: InspirationEntry[];
 };
 
 export function exportBackup(): void {
-  const sequences = loadSequences();
   const envelope: BackupEnvelope = {
     schemaVersion: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
-    sequences,
+    sequences: loadSequences(),
+    inspirations: loadInspirations(),
   };
   const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -29,7 +32,10 @@ export function exportBackup(): void {
 export type ImportPreview = {
   toAdd: number;
   toUpdate: number;
+  inspirationsToAdd: number;
+  inspirationsToUpdate: number;
   records: SequenceRecord[];
+  inspirations: InspirationEntry[];
 };
 
 export function parseBackupFile(text: string): ImportPreview {
@@ -52,18 +58,26 @@ export function parseBackupFile(text: string): ImportPreview {
 
   const envelope = parsed as BackupEnvelope;
   const records = envelope.sequences.map(migrateRecord);
+  const inspirations = Array.isArray(envelope.inspirations) ? envelope.inspirations : [];
 
   const existing = loadSequences();
   const existingIds = new Set(existing.map((s) => s.id));
   const toAdd = records.filter((r) => !existingIds.has(r.id)).length;
   const toUpdate = records.filter((r) => existingIds.has(r.id)).length;
 
-  return { toAdd, toUpdate, records };
+  const existingInspirationIds = new Set(loadInspirations().map((e) => e.id));
+  const inspirationsToAdd = inspirations.filter((e) => !existingInspirationIds.has(e.id)).length;
+  const inspirationsToUpdate = inspirations.filter((e) => existingInspirationIds.has(e.id)).length;
+
+  return { toAdd, toUpdate, inspirationsToAdd, inspirationsToUpdate, records, inspirations };
 }
 
-export function applyImport(records: SequenceRecord[]): void {
-  for (const record of records) {
+export function applyImport(preview: ImportPreview): void {
+  for (const record of preview.records) {
     saveSequence(record);
+  }
+  for (const entry of preview.inspirations) {
+    saveInspiration(entry);
   }
 }
 

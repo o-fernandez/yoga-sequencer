@@ -31,6 +31,7 @@ import { abbreviatePose } from "@/lib/pose-abbreviations";
 import { BulkPoseEntry } from "@/components/bulk-pose-entry";
 import {
   computePeakReadiness,
+  insertPoseBeforePeak,
   type PeakReadiness,
 } from "@/lib/peak-readiness";
 import {
@@ -1109,6 +1110,7 @@ function CompactSectionBlock({
   onUpdateBreaths,
   onAddPose,
   onAddPoseBelow,
+  onAddPrep,
   onMoveSection,
   onMovePose,
   onRemovePose,
@@ -1128,6 +1130,7 @@ function CompactSectionBlock({
   onUpdateBreaths: (poseId: string, breaths: number) => void;
   onAddPose: (id: string) => void;
   onAddPoseBelow: (sectionId: string, afterPoseId: string) => void;
+  onAddPrep: (poseName: string) => void;
   onMoveSection: (dir: -1 | 1) => void;
   onMovePose: (sectionId: string, poseId: string, dir: -1 | 1) => void;
   onRemovePose: (sectionId: string, poseId: string) => void;
@@ -1371,7 +1374,7 @@ function CompactSectionBlock({
                 />
               </div>
               {openPose.id === peakPoseId && peakReadiness && (
-                <PeakReadinessNote readiness={peakReadiness} onAddPrep={() => {}} />
+                <PeakReadinessNote readiness={peakReadiness} onAddPrep={onAddPrep} />
               )}
             </div>
 
@@ -1520,9 +1523,13 @@ export default function BuilderPage() {
   // then mints a permanent URL so reloading doesn't spin up another blank.
   useEffect(() => {
     if (!loaded) return;
-    // For new sequences, only start saving once the user has explicitly set
-    // a name, theme, or notes — pre-loaded default poses don't count.
-    const hasContent = theme.trim() !== "" || notes.trim() !== "";
+    // For new sequences, only start saving once there's real content: a theme,
+    // notes, or at least one pose (new sequences start with empty sections, so
+    // any pose is user intent).
+    const hasContent =
+      theme.trim() !== "" ||
+      notes.trim() !== "" ||
+      sections.some((s) => s.poses.length > 0);
     if (isNew && !hasContent) return;
     const timer = setTimeout(() => {
       saveSequence({
@@ -1727,6 +1734,10 @@ export default function BuilderPage() {
   const makePoseItem = (poseName: string): PoseItem =>
     normalizePoseItem({ id: generateId(), pose: poseName, duration: "", minutes: 0 });
 
+  const addPrepPose = (poseName: string) => {
+    updateSections((prev) => insertPoseBeforePeak(prev, poseName, peakPose));
+  };
+
   const handleAuditAction = (action: AuditAction) => {
     if (action.kind === "mark_both_sides") {
       updateSections((prev) =>
@@ -1922,6 +1933,7 @@ export default function BuilderPage() {
                   onUpdateBreaths={updatePoseBreaths}
                   onAddPose={(id) => setAddPoseTarget({ sectionId: id })}
                   onAddPoseBelow={(sectionId, afterPoseId) => setAddPoseTarget({ sectionId, insertAfterPoseId: afterPoseId })}
+                  onAddPrep={addPrepPose}
                   onMoveSection={(dir) => moveSection(section.id, dir)}
                   onMovePose={movePose}
                   onRemovePose={removePose}
