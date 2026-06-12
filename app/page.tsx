@@ -8,7 +8,10 @@ import {
   loadSequences,
   deleteSequence,
   duplicateSequence,
+  isExampleSequence,
   localTodayISO,
+  removeExampleSequences,
+  resetSequencesToSeeds,
   type SequenceRecord,
   type ThemeType,
 } from "@/lib/sequences";
@@ -25,6 +28,9 @@ import {
   loadInspirations,
   saveInspiration,
   deleteInspiration,
+  isExampleInspiration,
+  removeExampleInspirations,
+  resetInspirationsToSeeds,
   type InspirationEntry,
 } from "@/lib/inspirations";
 
@@ -583,6 +589,11 @@ function SequenceCard({
           })}
         </div>
         <span className="text-[11px] text-stone-400">{dotLabel}</span>
+        {isExampleSequence(sequence.id) && (
+          <span className="ml-auto rounded-full border border-dashed border-stone-300 px-2 py-0.5 text-[10px] leading-none text-stone-400">
+            Example
+          </span>
+        )}
       </div>
     </article>
   );
@@ -607,15 +618,22 @@ function InspirationCard({
       onClick={onOpen}
       className="cursor-pointer select-none touch-pan-y rounded-2xl border border-purple-200/60 bg-purple-50/70 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur-sm transition [-webkit-touch-callout:none] hover:bg-purple-50/90 hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
     >
-      <p className="text-[13px] text-purple-700/70">
-        {formatDate(entry.date)}
-        {entry.source && (
-          <>
-            <span className="mx-1.5 text-purple-300">·</span>
-            {entry.source}
-          </>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-[13px] text-purple-700/70">
+          {formatDate(entry.date)}
+          {entry.source && (
+            <>
+              <span className="mx-1.5 text-purple-300">·</span>
+              {entry.source}
+            </>
+          )}
+        </p>
+        {isExampleInspiration(entry.id) && (
+          <span className="shrink-0 rounded-full border border-dashed border-purple-200 px-2 py-0.5 text-[10px] leading-none text-purple-400/80">
+            Example
+          </span>
         )}
-      </p>
+      </div>
       <p className="mt-2 text-[14px] italic leading-relaxed text-stone-700">
         {excerpt}
       </p>
@@ -776,7 +794,7 @@ function SelectionBar({
   );
 }
 
-function EmptyState() {
+function EmptyState({ onRestore }: { onRestore: () => void }) {
   return (
     <div className="rounded-3xl border border-dashed border-stone-300 bg-white/60 px-8 py-16 text-center">
       <p className="text-sm text-stone-500">No classes yet.</p>
@@ -786,7 +804,139 @@ function EmptyState() {
       >
         Plan your first class
       </Link>
+      <p className="mt-3 text-[13px] text-stone-400">
+        or{" "}
+        <button
+          type="button"
+          onClick={onRestore}
+          className="underline underline-offset-2 transition hover:text-stone-600"
+        >
+          restore from a backup
+        </button>
+      </p>
     </div>
+  );
+}
+
+// ─── Example management ──────────────────────────────────────────────────────
+
+function ExamplesNotice({ onRemove }: { onRemove: () => void }) {
+  return (
+    <div className="mb-5 border-l-2 border-stone-300/60 pl-4">
+      <p className="font-display text-sm italic leading-relaxed text-stone-500">
+        The classes marked &ldquo;Example&rdquo; are here to show how the journal works.
+      </p>
+      <p className="mt-0.5 text-[13px] text-stone-400">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="underline underline-offset-2 transition hover:text-stone-600"
+        >
+          Remove them
+        </button>{" "}
+        whenever you&rsquo;re ready.
+      </p>
+    </div>
+  );
+}
+
+function RemoveExamplesModal({
+  classCount,
+  inspirationCount,
+  onConfirm,
+  onCancel,
+}: {
+  classCount: number;
+  inspirationCount: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const parts = [`${classCount} example class${classCount === 1 ? "" : "es"}`];
+  if (inspirationCount > 0) {
+    parts.push(`${inspirationCount} example inspiration${inspirationCount === 1 ? "" : "s"}`);
+  }
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-sm">
+      <div className="mx-6 w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 shadow-xl">
+        <p className="font-display text-base font-medium text-stone-800">Remove the examples?</p>
+        <p className="mt-2 text-sm text-stone-500">
+          This removes the {parts.join(" and ")}, including any changes you made to them.
+          Your own classes aren&rsquo;t touched.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-full px-4 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 transition hover:bg-stone-700"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function StartOverModal({
+  ownClassCount,
+  ownInspirationCount,
+  onConfirm,
+  onCancel,
+}: {
+  ownClassCount: number;
+  ownInspirationCount: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const own: string[] = [];
+  if (ownClassCount > 0) own.push(`${ownClassCount} class${ownClassCount === 1 ? "" : "es"}`);
+  if (ownInspirationCount > 0) own.push(`${ownInspirationCount} inspiration${ownInspirationCount === 1 ? "" : "s"}`);
+  const body = own.length > 0
+    ? `This deletes your ${own.join(" and ")} and brings back the fresh examples. There is no undo.`
+    : "This resets everything back to just the fresh examples. There is no undo.";
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-sm">
+      <div className="mx-6 w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 shadow-xl">
+        <p className="font-display text-base font-medium text-stone-800">Start over?</p>
+        <p className="mt-2 text-sm text-stone-500">{body}</p>
+        {own.length > 0 && (
+          <p className="mt-2 text-[13px] text-stone-400">
+            <button
+              type="button"
+              onClick={() => exportBackup()}
+              className="underline underline-offset-2 transition hover:text-stone-600"
+            >
+              Export a backup first
+            </button>
+          </p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-full px-4 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-full bg-rose-700 px-4 py-2 text-sm font-medium text-rose-50 transition hover:bg-rose-800"
+          >
+            Start over
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -850,25 +1000,19 @@ function ImportModal({
   );
 }
 
-function BackupFooter({ onImported }: { onImported: () => void }) {
-  const [lastBackup, setLastBackup] = useState<string | null>(null);
+/**
+ * Backup-import flow shared by the data corner and the empty state: a hidden
+ * file input, the parse step, and the confirmation modal. Render `elements`
+ * once; call `openPicker` from any door.
+ */
+function useImportBackup(onImported: () => void) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setLastBackup(getLastBackupAt());
-  }, []);
-
-  const stale = (() => {
-    if (!lastBackup) return true;
-    const days = (Date.now() - new Date(lastBackup).getTime()) / 86_400_000;
-    return days >= 14;
-  })();
-
-  const handleExport = () => {
-    exportBackup();
-    setLastBackup(new Date().toISOString());
+  const openPicker = () => {
+    setError(null);
+    fileRef.current?.click();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -895,7 +1039,7 @@ function BackupFooter({ onImported }: { onImported: () => void }) {
     onImported();
   };
 
-  return (
+  const elements = (
     <>
       {preview && (
         <ImportModal
@@ -904,40 +1048,79 @@ function BackupFooter({ onImported }: { onImported: () => void }) {
           onCancel={() => setPreview(null)}
         />
       )}
-      <div className="mt-10 border-t border-stone-300/50 pt-4">
-        <div className="flex items-center justify-between gap-4">
-          <span className={`text-[13px] ${stale ? "text-amber-700/70" : "text-stone-400"}`}>
-            {formatLastBackup(lastBackup)}
-          </span>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleExport}
-              className="text-[13px] text-stone-400 transition hover:text-stone-600"
-            >
-              Export
-            </button>
-            <button
-              type="button"
-              onClick={() => { setError(null); fileRef.current?.click(); }}
-              className="text-[13px] text-stone-400 transition hover:text-stone-600"
-            >
-              Import
-            </button>
-          </div>
-        </div>
-        {error && (
-          <p className="mt-2 text-[12px] text-rose-500">{error}</p>
-        )}
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".json,application/json"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={handleFileChange}
+      />
     </>
+  );
+
+  return { openPicker, error, elements };
+}
+
+function BackupFooter({
+  onImport,
+  importError,
+  onStartOver,
+}: {
+  onImport: () => void;
+  importError: string | null;
+  onStartOver: () => void;
+}) {
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLastBackup(getLastBackupAt());
+  }, []);
+
+  const stale = (() => {
+    if (!lastBackup) return true;
+    const days = (Date.now() - new Date(lastBackup).getTime()) / 86_400_000;
+    return days >= 14;
+  })();
+
+  const handleExport = () => {
+    exportBackup();
+    setLastBackup(new Date().toISOString());
+  };
+
+  return (
+    <div className="mt-10 border-t border-stone-300/50 pt-4">
+      <div className="flex items-center justify-between gap-4">
+        <span className={`text-[13px] ${stale ? "text-amber-700/70" : "text-stone-400"}`}>
+          {formatLastBackup(lastBackup)}
+        </span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="text-[13px] text-stone-400 transition hover:text-stone-600"
+          >
+            Export
+          </button>
+          <button
+            type="button"
+            onClick={onImport}
+            className="text-[13px] text-stone-400 transition hover:text-stone-600"
+          >
+            Import
+          </button>
+          <button
+            type="button"
+            onClick={onStartOver}
+            className="text-[13px] text-stone-400 transition hover:text-stone-600"
+          >
+            Start over…
+          </button>
+        </div>
+      </div>
+      {importError && (
+        <p className="mt-2 text-[12px] text-rose-500">{importError}</p>
+      )}
+    </div>
   );
 }
 
@@ -950,9 +1133,13 @@ export default function LibraryPage() {
   const [inspirations, setInspirations] = useState<InspirationEntry[]>([]);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [editingInspiration, setEditingInspiration] = useState<InspirationEntry | null>(null);
+  const [removeExamplesOpen, setRemoveExamplesOpen] = useState(false);
+  const [startOverOpen, setStartOverOpen] = useState(false);
 
   const selectionMode = selectedIds.size > 0;
   const upcoming = upcomingTeachingItems(sequences);
+  const exampleClassCount = sequences.filter((s) => isExampleSequence(s.id)).length;
+  const exampleInspirationCount = inspirations.filter((e) => isExampleInspiration(e.id)).length;
 
   useEffect(() => {
     const reload = () => {
@@ -1039,6 +1226,28 @@ export default function LibraryPage() {
     setEditingInspiration(null);
   }, []);
 
+  const importer = useImportBackup(() => {
+    reloadSequences();
+    reloadInspirations();
+  });
+
+  const handleRemoveExamples = () => {
+    removeExampleSequences();
+    removeExampleInspirations();
+    reloadSequences();
+    reloadInspirations();
+    setRemoveExamplesOpen(false);
+  };
+
+  const handleStartOver = () => {
+    resetSequencesToSeeds();
+    resetInspirationsToSeeds();
+    reloadSequences();
+    reloadInspirations();
+    clearSelection();
+    setStartOverOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-[#e8e3da] px-6 py-12 text-stone-800">
       <main className="mx-auto w-full max-w-2xl">
@@ -1101,7 +1310,7 @@ export default function LibraryPage() {
           <div className="py-16 text-center text-sm text-stone-400">Loading…</div>
         ) : activeTab === "classes" ? (
           sequences.length === 0 ? (
-            <EmptyState />
+            <EmptyState onRestore={importer.openPicker} />
           ) : (
             <>
               {upcoming.length > 0 && !selectionMode && (
@@ -1109,6 +1318,9 @@ export default function LibraryPage() {
                   items={upcoming}
                   onOpen={(id) => router.push(`/sequence/${id}`)}
                 />
+              )}
+              {exampleClassCount > 0 && !selectionMode && (
+                <ExamplesNotice onRemove={() => setRemoveExamplesOpen(true)} />
               )}
               {selectionMode && (
                 <p className="mb-3 text-xs text-stone-400">
@@ -1147,9 +1359,33 @@ export default function LibraryPage() {
         )}
 
         {loaded && activeTab === "classes" && (
-          <BackupFooter onImported={() => { reloadSequences(); reloadInspirations(); }} />
+          <BackupFooter
+            onImport={importer.openPicker}
+            importError={importer.error}
+            onStartOver={() => setStartOverOpen(true)}
+          />
         )}
       </main>
+
+      {importer.elements}
+
+      {removeExamplesOpen && (
+        <RemoveExamplesModal
+          classCount={exampleClassCount}
+          inspirationCount={exampleInspirationCount}
+          onConfirm={handleRemoveExamples}
+          onCancel={() => setRemoveExamplesOpen(false)}
+        />
+      )}
+
+      {startOverOpen && (
+        <StartOverModal
+          ownClassCount={sequences.length - exampleClassCount}
+          ownInspirationCount={inspirations.length - exampleInspirationCount}
+          onConfirm={handleStartOver}
+          onCancel={() => setStartOverOpen(false)}
+        />
+      )}
 
       {selectionMode && (
         <SelectionBar

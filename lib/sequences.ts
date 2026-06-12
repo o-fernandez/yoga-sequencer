@@ -111,6 +111,7 @@ export function sortedUpcomingEntries(dates: TeachEntry[]): TeachEntry[] {
 const STORAGE_KEY = "yoga-sequences";
 const SEEDS_VERSION = 4;
 const SEEDS_VERSION_KEY = "yoga-seeds-version";
+const EXAMPLES_CLEARED_KEY = "yoga-examples-cleared";
 const OLD_SEED_IDS = new Set([
   "seed-shoulder-opening", "seed-grounding-flow", "seed-hip-opening-45",            // v1
   "seed-hip-freedom", "seed-heart-opener", "seed-finding-steadiness",               // v2
@@ -164,18 +165,47 @@ function p(id: string, pose: string, cue?: string): PoseItem {
 }
 
 /** YYYY-MM-DD `offset` days from today (negative = past), in local time. */
-function daysFromToday(offset: number): string {
+export function daysFromToday(offset: number): string {
   const d = new Date();
   d.setDate(d.getDate() + offset);
   return toLocalISODate(d);
 }
 
 /** Full ISO timestamp `days` days ago, at a quiet morning hour. */
-function timestampDaysAgo(days: number): string {
+export function timestampDaysAgo(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
   d.setHours(9, 0, 0, 0);
   return d.toISOString();
+}
+
+// ─── Example (seed) management ───────────────────────────────────────────────
+
+export function isExampleSequence(id: string): boolean {
+  return id.startsWith("seed-");
+}
+
+/** True once the user has removed the examples — seeding stays off for good. */
+export function examplesCleared(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(EXAMPLES_CLEARED_KEY) === "1";
+}
+
+/** Remove all example classes, keep the user's own, and suppress future seeding. */
+export function removeExampleSequences(): void {
+  if (typeof window === "undefined") return;
+  const kept = loadSequences().filter((s) => !isExampleSequence(s.id));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(kept));
+  localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
+  localStorage.setItem(EXAMPLES_CLEARED_KEY, "1");
+}
+
+/** Start over: drop everything and reseed the examples with fresh relative dates. */
+export function resetSequencesToSeeds(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(EXAMPLES_CLEARED_KEY);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(buildSeedSequences().map(migrateRecord)));
+  localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
 }
 
 /**
@@ -405,6 +435,7 @@ export function loadSequences(): SequenceRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
+      if (examplesCleared()) return [];
       const seeded = buildSeedSequences().map(migrateRecord);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
       localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
@@ -414,9 +445,10 @@ export function loadSequences(): SequenceRecord[] {
     const storedVersion = Number(localStorage.getItem(SEEDS_VERSION_KEY) ?? 0);
     let records: SequenceRecord[] = parsed;
     if (storedVersion < SEEDS_VERSION) {
-      // Remove old seeds, inject new ones at the front
+      // Remove old seeds, inject new ones at the front — unless the user
+      // already cleared the examples; that choice outlives seed refreshes.
       records = (parsed as SequenceRecord[]).filter((r) => !OLD_SEED_IDS.has(r.id));
-      records = [...buildSeedSequences(), ...records];
+      if (!examplesCleared()) records = [...buildSeedSequences(), ...records];
       localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
     }
     const migrated = records.map(migrateRecord);
