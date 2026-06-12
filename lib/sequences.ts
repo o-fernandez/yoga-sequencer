@@ -87,10 +87,17 @@ export type SequenceRecord = {
   showAnalysis?: boolean;
 };
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+function toLocalISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Today as YYYY-MM-DD in the device's timezone — an evening class is still "today". */
+export function localTodayISO(): string {
+  return toLocalISODate(new Date());
+}
 
 export function isTaught(entry: TeachEntry): boolean {
-  return entry.date <= todayISO();
+  return entry.date <= localTodayISO();
 }
 
 export function sortedTaughtEntries(dates: TeachEntry[]): TeachEntry[] {
@@ -102,11 +109,13 @@ export function sortedUpcomingEntries(dates: TeachEntry[]): TeachEntry[] {
 }
 
 const STORAGE_KEY = "yoga-sequences";
-const SEEDS_VERSION = 3;
+const SEEDS_VERSION = 4;
 const SEEDS_VERSION_KEY = "yoga-seeds-version";
 const OLD_SEED_IDS = new Set([
-  "seed-shoulder-opening", "seed-grounding-flow", "seed-hip-opening-45", // v1
-  "seed-hip-freedom", "seed-heart-opener", "seed-finding-steadiness",    // v2
+  "seed-shoulder-opening", "seed-grounding-flow", "seed-hip-opening-45",            // v1
+  "seed-hip-freedom", "seed-heart-opener", "seed-finding-steadiness",               // v2
+  "seed-hip-freedom-v3", "seed-heart-opener-v3", "seed-finding-steadiness-v3",      // v3
+  "seed-kidney-meridian-v3",                                                        // v3
 ]);
 
 export function generateId(): string {
@@ -154,10 +163,33 @@ function p(id: string, pose: string, cue?: string): PoseItem {
   });
 }
 
-const SEED_SEQUENCES: SequenceRecord[] = [
-  // 1 ── Hip freedom: Kapha season, well-worn class taught three times, notes showing evolution
+/** YYYY-MM-DD `offset` days from today (negative = past), in local time. */
+function daysFromToday(offset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return toLocalISODate(d);
+}
+
+/** Full ISO timestamp `days` days ago, at a quiet morning hour. */
+function timestampDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  d.setHours(9, 0, 0, 0);
+  return d.toISOString();
+}
+
+/**
+ * Seed dates are computed relative to the day the seeds land on a device, so
+ * the examples stay evergreen: a teaching history that reads as recent, and
+ * one or two classes planned in the coming week so the library's time-aware
+ * features (Teaching Ahead strip, taught dots) are alive on first open.
+ */
+function buildSeedSequences(): SequenceRecord[] {
+  return [
+  // 1 ── Hip freedom: Kapha season, well-worn class taught three times with
+  //      notes showing evolution, planned again next week
   {
-    id: "seed-hip-freedom-v3",
+    id: "seed-hip-freedom-v4",
     name: "Hip freedom",
     theme: "Creating space where we hold tension",
     themeType: "season",
@@ -165,12 +197,13 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     peakPose: "Pigeon",
     showAnalysis: false,
     dates: [
-      { date: "2026-04-14", notes: "First time with this structure. Went long on floor — had to cut wind-down short. Pigeon felt rushed. Need to trim the standing series or drop one neutral hip pose." },
-      { date: "2026-05-05", notes: "Added Skandasana to the neutral hips round — beautiful transition from Crescent. Students loved it. Floor felt right this time. Wind-down was complete for the first time." },
-      { date: "2026-05-20", notes: "This is the version I'll keep. Skandasana into Figure 4 Balance is the signature moment. Wheel landed for three people who'd never gotten it. Save this." },
+      { date: daysFromToday(-58), notes: "First time with this structure. Went long on floor — had to cut wind-down short. Pigeon felt rushed. Need to trim the standing series or drop one neutral hip pose." },
+      { date: daysFromToday(-37), notes: "Added Skandasana to the neutral hips round — beautiful transition from Crescent. Students loved it. Floor felt right this time. Wind-down was complete for the first time." },
+      { date: daysFromToday(-22), notes: "This is the version I'll keep. Skandasana into Figure 4 Balance is the signature moment. Wheel landed for three people who'd never gotten it. Save this." },
+      { date: daysFromToday(5) },
     ],
-    createdAt: "2026-04-12T09:00:00.000Z",
-    updatedAt: "2026-05-20T09:00:00.000Z",
+    createdAt: timestampDaysAgo(60),
+    updatedAt: timestampDaysAgo(22),
     sections: [
       {
         id: "hf-opening", title: "Opening", secondSide: false,
@@ -263,18 +296,18 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     ],
   },
 
-  // 2 ── Heart opener: Anahata chakra, structural sketch, planned for next week
+  // 2 ── Heart opener: Anahata chakra, structural sketch, planned in a few days
   {
-    id: "seed-heart-opener-v3",
+    id: "seed-heart-opener-v4",
     name: "Expanding what we can receive",
     theme: "Expanding what we can receive",
     themeType: "chakra",
     themeSub: "4 · Anahata (heart)",
     peakPose: "Wheel",
     showAnalysis: false,
-    dates: [{ date: "2026-06-09" }],
-    createdAt: "2026-05-29T10:00:00.000Z",
-    updatedAt: "2026-05-29T10:00:00.000Z",
+    dates: [{ date: daysFromToday(3) }],
+    createdAt: timestampDaysAgo(13),
+    updatedAt: timestampDaysAgo(13),
     sections: [
       { id: "ho-opening",   title: "Opening",        secondSide: false, poses: [] },
       {
@@ -316,7 +349,7 @@ const SEED_SEQUENCES: SequenceRecord[] = [
 
   // 3 ── Finding steadiness: Muladhara chakra, quick teaching log entry
   {
-    id: "seed-finding-steadiness-v3",
+    id: "seed-finding-steadiness-v4",
     name: "Finding steadiness",
     theme: "Finding steadiness",
     themeType: "chakra",
@@ -324,16 +357,16 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     peakPose: "Eagle",
     showAnalysis: false,
     dates: [
-      { date: "2026-05-27", notes: "Students were scattered today — this grounding theme landed. Held Eagle longer than planned, about 8 breaths each side. New cue: 'let your gaze soften as the body settles.' Keeping this." },
+      { date: daysFromToday(-15), notes: "Students were scattered today — this grounding theme landed. Held Eagle longer than planned, about 8 breaths each side. New cue: 'let your gaze soften as the body settles.' Keeping this." },
     ],
-    createdAt: "2026-05-27T09:00:00.000Z",
-    updatedAt: "2026-05-27T09:00:00.000Z",
+    createdAt: timestampDaysAgo(15),
+    updatedAt: timestampDaysAgo(15),
     sections: [],
   },
 
   // 4 ── Kidney meridian: idea in progress, never taught — shows scratch pad + empty dot row
   {
-    id: "seed-kidney-meridian-v3",
+    id: "seed-kidney-meridian-v4",
     name: "",
     theme: "Letting go of what we don't need",
     themeType: "meridian",
@@ -342,8 +375,8 @@ const SEED_SEQUENCES: SequenceRecord[] = [
     showAnalysis: false,
     notes: "Want to build around long holds and internal quiet. Maybe open with a 5-min seated meditation instead of the usual floor warm-up. Kidney meridian = will, fear, conservation of energy — let the poses do less, let stillness do more.",
     dates: [],
-    createdAt: "2026-05-31T08:00:00.000Z",
-    updatedAt: "2026-05-31T08:00:00.000Z",
+    createdAt: timestampDaysAgo(11),
+    updatedAt: timestampDaysAgo(11),
     sections: [
       { id: "km-opening",  title: "Opening meditation", secondSide: false, poses: [] },
       {
@@ -364,14 +397,15 @@ const SEED_SEQUENCES: SequenceRecord[] = [
       { id: "km-close",    title: "Closing",    secondSide: false, poses: [] },
     ],
   },
-];
+  ];
+}
 
 export function loadSequences(): SequenceRecord[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      const seeded = SEED_SEQUENCES.map(migrateRecord);
+      const seeded = buildSeedSequences().map(migrateRecord);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
       localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
       return seeded;
@@ -382,7 +416,7 @@ export function loadSequences(): SequenceRecord[] {
     if (storedVersion < SEEDS_VERSION) {
       // Remove old seeds, inject new ones at the front
       records = (parsed as SequenceRecord[]).filter((r) => !OLD_SEED_IDS.has(r.id));
-      records = [...SEED_SEQUENCES, ...records];
+      records = [...buildSeedSequences(), ...records];
       localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
     }
     const migrated = records.map(migrateRecord);

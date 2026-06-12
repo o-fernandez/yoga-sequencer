@@ -1,4 +1,4 @@
-import { loadSequences, saveSequence, migrateRecord, type SequenceRecord } from "./sequences";
+import { loadSequences, localTodayISO, saveSequence, migrateRecord, type SequenceRecord } from "./sequences";
 import { loadInspirations, saveInspiration, type InspirationEntry } from "./inspirations";
 
 const SCHEMA_VERSION = 2;
@@ -23,7 +23,7 @@ export function exportBackup(): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `yoga-sequences-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `yoga-sequences-backup-${localTodayISO()}.json`;
   a.click();
   URL.revokeObjectURL(url);
   localStorage.setItem(BACKUP_TS_KEY, new Date().toISOString());

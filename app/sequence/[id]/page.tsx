@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   generateId,
   loadSequence,
+  localTodayISO,
   saveSequence,
   normalizePoseItem,
   formatBreathEstimate,
@@ -946,7 +947,7 @@ function TeachingLog({
   dates: TeachEntry[];
   onChange: (dates: TeachEntry[]) => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localTodayISO();
   const past = sortedTaughtEntries(dates);
   const upcoming = sortedUpcomingEntries(dates);
   const [addingEntry, setAddingEntry] = useState(false);
