@@ -37,6 +37,9 @@ const ABBREVIATIONS: Record<string, string> = {
   "Legs Up the Wall": "Legs Up",
   "Savasana": "Sav",
   "Child's Pose": "Child's",
+  "Gate Pose": "Gate",
+  "Seated Side Bend": "Seat Bend",
+  "Sukhasana": "Sukha",
 };
 
 export function abbreviatePose(poseName: string): string {

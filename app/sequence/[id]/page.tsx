@@ -1109,6 +1109,8 @@ function CompactSectionBlock({
   onUpdateRounds,
   onUpdateCue,
   onUpdateBreaths,
+  onToggleTheme,
+  onSetPeak,
   onAddPose,
   onAddPoseBelow,
   onAddPrep,
@@ -1129,6 +1131,8 @@ function CompactSectionBlock({
   onUpdateRounds: (id: string, rounds: number) => void;
   onUpdateCue: (poseId: string, cue: string) => void;
   onUpdateBreaths: (poseId: string, breaths: number) => void;
+  onToggleTheme: (poseId: string) => void;
+  onSetPeak: (poseName: string | undefined) => void;
   onAddPose: (id: string) => void;
   onAddPoseBelow: (sectionId: string, afterPoseId: string) => void;
   onAddPrep: (poseName: string) => void;
@@ -1228,6 +1232,7 @@ function CompactSectionBlock({
         <div className="flex flex-1 flex-wrap gap-1 items-center">
           {section.poses.map((pose) => {
             const isPeak = pose.id === peakPoseId;
+            const isTheme = Boolean(pose.themePose) && !isPeak;
             const hasCue = Boolean(pose.cue);
             const isOpen = pose.id === openPoseId;
             return (
@@ -1243,13 +1248,19 @@ function CompactSectionBlock({
                   hasCue
                     ? isPeak
                       ? "border-2 border-amber-300"
-                      : "border-2 border-stone-300"
+                      : isTheme
+                        ? "border-2 border-amber-200/70"
+                        : "border-2 border-stone-300"
                     : isPeak
                       ? "border border-amber-200"
-                      : "border border-stone-200",
+                      : isTheme
+                        ? "border border-amber-200/70"
+                        : "border border-stone-200",
                   isOpen ? "ring-1 ring-stone-400 ring-offset-1" : "",
                 ].join(" ")}
               >
+                {isPeak && <span aria-hidden className="mr-0.5 text-amber-500">★</span>}
+                {isTheme && <span aria-hidden className="mr-0.5 text-amber-400/70">★</span>}
                 {abbreviatePose(pose.pose)}
               </button>
             );
@@ -1353,21 +1364,41 @@ function CompactSectionBlock({
         <div className="mt-2 rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-stone-800">
-                {openPose.pose}
-                {openPose.id === peakPoseId && (
-                  <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                    <span aria-hidden>△</span> Peak
-                  </span>
-                )}
-              </p>
+              <p className="text-sm font-medium text-stone-800">{openPose.pose}</p>
               {(() => {
                 const m = getPoseMeta(openPose.pose);
                 return m?.sanskrit ? (
                   <p className="text-[11px] italic text-stone-400">{m.sanskrit}</p>
                 ) : null;
               })()}
-              <div className="mt-1">
+              {/* Theme & peak markers — quiet toggles that stay in sync with the header */}
+              <div className="mt-2 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onToggleTheme(openPose.id)}
+                  aria-pressed={Boolean(openPose.themePose)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition ${
+                    openPose.themePose
+                      ? "border-amber-300 bg-amber-50 text-amber-700"
+                      : "border-stone-200 bg-white text-stone-400 hover:border-stone-300 hover:text-stone-600"
+                  }`}
+                >
+                  <span aria-hidden>★</span> Theme
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSetPeak(openPose.id === peakPoseId ? undefined : openPose.pose)}
+                  aria-pressed={openPose.id === peakPoseId}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] transition ${
+                    openPose.id === peakPoseId
+                      ? "border-amber-400 bg-amber-100 text-amber-800"
+                      : "border-stone-200 bg-white text-stone-400 hover:border-stone-300 hover:text-stone-600"
+                  }`}
+                >
+                  <span aria-hidden>★★</span> Peak
+                </button>
+              </div>
+              <div className="mt-1.5">
                 <PoseCueField
                   cue={openPose.cue}
                   compact
@@ -1702,6 +1733,24 @@ export default function BuilderPage() {
     );
   };
 
+  const toggleThemePose = (poseId: string) => {
+    updateSections((prev) =>
+      prev.map((s) => ({
+        ...s,
+        poses: s.poses.map((p) =>
+          p.id === poseId ? { ...p, themePose: p.themePose ? undefined : true } : p,
+        ),
+      })),
+    );
+  };
+
+  // Marking a pose as peak fills the header field; clearing it empties the field.
+  // Peak lives on the record as `peakPose` — one source of truth shared with the
+  // header picker, so the two views can never disagree.
+  const setPeakFromPose = (poseName: string | undefined) => {
+    setPeakPose(poseName);
+  };
+
   // Peak readiness: does the arc warm up what the peak depends on?
   const peakReadiness = useMemo(
     () => (peakPose ? computePeakReadiness(sections, peakPose) : null),
@@ -1932,6 +1981,8 @@ export default function BuilderPage() {
                   onUpdateRounds={updateSectionRounds}
                   onUpdateCue={updatePoseCue}
                   onUpdateBreaths={updatePoseBreaths}
+                  onToggleTheme={toggleThemePose}
+                  onSetPeak={setPeakFromPose}
                   onAddPose={(id) => setAddPoseTarget({ sectionId: id })}
                   onAddPoseBelow={(sectionId, afterPoseId) => setAddPoseTarget({ sectionId, insertAfterPoseId: afterPoseId })}
                   onAddPrep={addPrepPose}

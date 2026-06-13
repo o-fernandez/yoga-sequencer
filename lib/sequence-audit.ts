@@ -175,6 +175,52 @@ export function posesAfter(sections: Section[], location: PoseLocation): string[
   return out;
 }
 
+/**
+ * Theme focus built from the poses the teacher actually marked (★), plus the
+ * peak. Only engages when at least one pose is marked — otherwise the audit
+ * falls back to inferring the theme from keywords / the peak pose alone.
+ */
+function markedThemeFocus(
+  sections: Section[],
+  theme: string | undefined,
+  peakPose: string | undefined,
+): ThemeFocus | null {
+  const marked = sections.flatMap((s) => s.poses).filter((p) => p.themePose);
+  if (marked.length === 0) return null;
+
+  const targets = new Set<BodyTarget>();
+  const types = new Set<PoseType>();
+  const contributors = [...marked.map((p) => p.pose), ...(peakPose ? [peakPose] : [])];
+  for (const name of contributors) {
+    const meta = getPoseMeta(name);
+    if (!meta) continue;
+    meta.bodyTargets.forEach((t) => targets.add(t));
+    types.add(meta.poseType);
+  }
+  if (targets.size === 0 && types.size === 0) return null;
+
+  return {
+    label: theme?.trim() ? theme.trim().toLowerCase() : "your theme",
+    bodyTargets: [...targets],
+    poseTypes: [...types],
+  };
+}
+
+/** Names of poses marked as carrying the theme, de-duplicated, in running order. */
+function markedThemeNames(sections: Section[]): string[] {
+  return [
+    ...new Set(sections.flatMap((s) => s.poses.filter((p) => p.themePose).map((p) => p.pose))),
+  ];
+}
+
+/** Cut guidance that protects the theme when poses are marked, generic otherwise. */
+function trimGuidance(themeNames: string[]): string {
+  if (themeNames.length === 0) return "cut from standing work first.";
+  const list = themeNames.slice(0, 3).join(", ");
+  const more = themeNames.length > 3 ? ", then the rest" : "";
+  return `trim the poses that aren't carrying the theme first — protect ${list}${more}.`;
+}
+
 function inferThemeFocus(theme: string | undefined, peakPose: string | undefined): ThemeFocus | null {
   const text = `${theme ?? ""} ${peakPose ?? ""}`.toLowerCase();
   for (const candidate of THEME_FOCI) {
@@ -206,7 +252,7 @@ function sectionSupportsFocus(section: Section, focus: ThemeFocus): boolean {
 
 function humanFocusTargets(focus: ThemeFocus): string {
   if (focus.bodyTargets.length === 0) return focus.label;
-  return focus.bodyTargets.map(getBodyTargetLabel).join(", ");
+  return focus.bodyTargets.slice(0, 3).map(getBodyTargetLabel).join(", ");
 }
 
 function normalizedRoundSignature(section: Section): string[] {
@@ -247,6 +293,7 @@ export function auditSequence({
   }, 0);
 
   const issues: SequenceAuditIssue[] = [];
+  const themeNames = markedThemeNames(realSections);
 
   if (totalMinutes > 48 && totalMinutes <= 65) {
     addIssue(issues, {
@@ -254,7 +301,7 @@ export function auditSequence({
       severity: "warning",
       category: "Pacing",
       title: "This is probably not a 45-minute class",
-      detail: `${Math.round(totalMinutes)} minutes leaves almost no room for transitions, demos, or breath resets. For 45 minutes, cut from standing work first.`,
+      detail: `${Math.round(totalMinutes)} minutes leaves almost no room for transitions, demos, or breath resets. For 45 minutes, ${trimGuidance(themeNames)}`,
     });
   } else if (totalMinutes > 65) {
     addIssue(issues, {
@@ -272,7 +319,11 @@ export function auditSequence({
       severity: standingMinutes > 26 ? "critical" : "warning",
       category: "Pacing",
       title: "Standing work is carrying too much weight",
-      detail: `${Math.round(standingMinutes)} minutes in standing work risks rushing the floor and close. Protect the landing by trimming one balance, bind, or optional open-hip pose.`,
+      detail: `${Math.round(standingMinutes)} minutes in standing work risks rushing the floor and close. ${
+        themeNames.length > 0
+          ? `Trim a pose that isn't carrying the theme — keep ${themeNames.slice(0, 3).join(", ")}.`
+          : "Protect the landing by trimming one balance, bind, or optional open-hip pose."
+      }`,
     });
   }
 
@@ -336,7 +387,7 @@ export function auditSequence({
     }
   }
 
-  const focus = inferThemeFocus(theme, peakPose);
+  const focus = markedThemeFocus(realSections, theme, peakPose) ?? inferThemeFocus(theme, peakPose);
   if (focus) {
     const missingRoles: string[] = [];
     const checks: { role: SectionRole; label: string }[] = [

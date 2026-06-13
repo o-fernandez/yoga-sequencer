@@ -8,6 +8,12 @@ export type PoseItem = {
   cue?: string;
   breaths?: number;
   holdMode?: boolean;
+  /**
+   * Carries the class theme. A property of the pose, so it follows the pose
+   * across both-sides passes and repeating rounds. The peak is tracked
+   * separately as the sequence-level `peakPose` (one source of truth).
+   */
+  themePose?: boolean;
 };
 
 // Breath pace zones from vinyasa research — rate is pose-type-aware:
@@ -109,7 +115,7 @@ export function sortedUpcomingEntries(dates: TeachEntry[]): TeachEntry[] {
 }
 
 const STORAGE_KEY = "yoga-sequences";
-const SEEDS_VERSION = 4;
+const SEEDS_VERSION = 5;
 const SEEDS_VERSION_KEY = "yoga-seeds-version";
 const EXAMPLES_CLEARED_KEY = "yoga-examples-cleared";
 const OLD_SEED_IDS = new Set([
@@ -117,6 +123,8 @@ const OLD_SEED_IDS = new Set([
   "seed-hip-freedom", "seed-heart-opener", "seed-finding-steadiness",               // v2
   "seed-hip-freedom-v3", "seed-heart-opener-v3", "seed-finding-steadiness-v3",      // v3
   "seed-kidney-meridian-v3",                                                        // v3
+  "seed-hip-freedom-v4", "seed-heart-opener-v4", "seed-finding-steadiness-v4",      // v4
+  "seed-kidney-meridian-v4",                                                        // v4
 ]);
 
 export function generateId(): string {
@@ -154,13 +162,14 @@ export function migrateRecord(raw: any): SequenceRecord {
 }
 
 /** Build a PoseItem for seed sequences with breaths defaults applied. */
-function p(id: string, pose: string, cue?: string): PoseItem {
+function p(id: string, pose: string, cue?: string, themePose?: boolean): PoseItem {
   return normalizePoseItem({
     id,
     pose,
     duration: "",
     minutes: 0,
     ...(cue ? { cue } : {}),
+    ...(themePose ? { themePose: true } : {}),
   });
 }
 
@@ -216,10 +225,150 @@ export function resetSequencesToSeeds(): void {
  */
 function buildSeedSequences(): SequenceRecord[] {
   return [
+  // 0 ── Lateral chain opening: Summer, building-rounds power class with full
+  //      theme/peak markers — planned for tomorrow so it leads the library.
+  {
+    id: "seed-lateral-chain-v5",
+    name: "Lateral chain opening",
+    theme: "Opening the side body — creating space where we hold on",
+    themeType: "season",
+    themeSub: "Summer",
+    peakPose: "Extended Side Angle",
+    showAnalysis: false,
+    notes:
+      "60-min hot vinyasa · 95° room · Building-rounds (Round 1 introduce → 2 deepen → 3 peak). " +
+      "45-min version: skip the ⬡ poses (Triangle in Round 2, Crow in Round 3, Wheel in the floor series).\n\n" +
+      "Dharma talk (~90s, seated in Sukhasana): Es verano. El sol ya está arriba y el calor es real — no solo " +
+      "aquí adentro. Todo se expande en verano. Hoy exploramos el movimiento lateral — abrir los lados del cuerpo, " +
+      "crear espacio donde a veces cargamos tensión sin saber. Extended Side Angle es un arco: una línea desde el " +
+      "pie hasta los dedos. Para hacer ese arco, tienes que ceder — soltar el costado que se resiste. ¿Dónde me " +
+      "estoy apretando? ¿Qué pasa si simplemente… alargo?\n\n" +
+      "Props: strap for the ESA bind — offer it as an equal option, not a regression.\n\n" +
+      "Dwell poses: Pyramid (Round 3, 5 breaths) · ESA (Round 3, 5–8 breaths) · Pigeon (as long as time allows).\n\n" +
+      "Physical checks: Gomukhasana arms in Triangle ONLY (blocked in ESA by the torso angle). " +
+      "After Wheel, always Constructive Rest before seated — 95° room.",
+    dates: [{ date: daysFromToday(1) }],
+    createdAt: timestampDaysAgo(0),
+    updatedAt: timestampDaysAgo(0),
+    sections: [
+      {
+        id: "lc-warmup", title: "Warm-up", secondSide: false,
+        poses: [
+          p("lc-wu-1", "Sukhasana", "Seated. Settle. Today we open the lateral line."),
+          p("lc-wu-2", "Seated Side Bend", "R then L. Hands overhead, lengthen the side body — feel the ribs stack and separate. This is the theme's first physical statement.", true),
+          p("lc-wu-3", "Cat/Cow", "4 rounds"),
+          p("lc-wu-4", "Thread the Needle", "R then L — thoracic rotation to complement the lateral opening"),
+          p("lc-wu-5", "Gate Pose", "R then L. One knee down, the other leg long to the side. Reach the top arm — make a bow shape with your whole side body. A preview of the ESA line.", true),
+          p("lc-wu-6", "Downward Dog", "5 breaths"),
+          p("lc-wu-7", "Plank", "Hip dips — sway the hips side to side, both ways. Lateral core."),
+          p("lc-wu-8", "Downward Dog", "Reset after the hip dips"),
+          p("lc-wu-9", "Standing Forward Fold", "Walk or float to the top of the mat → half-lift → rise to Mountain"),
+          p("lc-wu-10", "Mountain Pose"),
+        ],
+      },
+      {
+        id: "lc-surya-a", title: "Surya A", secondSide: false, rounds: 3,
+        poses: [
+          p("lc-sa-1",  "Mountain Pose", "Breath to movement. Standard — no lateral variation. Let the body warm evenly before the theme lands."),
+          p("lc-sa-2",  "Extended Mountain"),
+          p("lc-sa-3",  "Standing Forward Fold"),
+          p("lc-sa-4",  "Half Lift"),
+          p("lc-sa-5",  "Plank"),
+          p("lc-sa-6",  "Chaturanga"),
+          p("lc-sa-7",  "Upward Dog"),
+          p("lc-sa-8",  "Downward Dog"),
+          p("lc-sa-9",  "Half Lift"),
+          p("lc-sa-10", "Standing Forward Fold"),
+          p("lc-sa-11", "Extended Mountain"),
+          p("lc-sa-12", "Mountain Pose"),
+        ],
+      },
+      {
+        id: "lc-round-1", title: "Round 1 · Introduce", secondSide: true,
+        poses: [
+          p("lc-r1-1", "Warrior I"),
+          p("lc-r1-2", "Devotional Warrior", "First lateral opening — chest toward the inside of the front foot, hands interlaced behind the back.", true),
+          p("lc-r1-3", "Warrior II", "Rise"),
+          p("lc-r1-4", "Peaceful Warrior", "Back hand slides down the back leg, front arm reaches long overhead — the bow shape from this morning.", true),
+          p("lc-r1-5", "Triangle", "Bottom hand to shin or block"),
+          p("lc-r1-6", "Extended Side Angle", "Forearm to thigh. Top arm overhead alongside the ear — one long line from back foot to fingertips. Breathe into the side ribs.", true),
+          p("lc-r1-7", "Half Moon", "→ Forward Fold → Vinyasa"),
+          p("lc-r1-8", "Vinyasa"),
+        ],
+      },
+      {
+        id: "lc-round-2", title: "Round 2 · Deepen", secondSide: true,
+        poses: [
+          p("lc-r2-1", "Warrior I"),
+          p("lc-r2-2", "Devotional Warrior", undefined, true),
+          p("lc-r2-3", "Pyramid", "Straighten the front leg, both hips square. Let the side body breathe. Closed-hip prep — hamstrings + QL."),
+          p("lc-r2-4", "Warrior II", "Bend the front knee, spin the back foot"),
+          p("lc-r2-5", "Peaceful Warrior", undefined, true),
+          p("lc-r2-6", "Triangle", "⬡ 45-min: skip straight to ESA"),
+          p("lc-r2-7", "Extended Side Angle", "Full arm extension — fingertips toward the wall ahead. The whole side in one unbroken line. ⬡ Optional bind: bottom arm threads under the front thigh; clasp or strap.", true),
+          p("lc-r2-8", "Half Moon", "→ Forward Fold → Vinyasa"),
+          p("lc-r2-9", "Vinyasa"),
+        ],
+      },
+      {
+        id: "lc-round-3", title: "Round 3 · Peak", secondSide: true,
+        poses: [
+          p("lc-r3-1", "Warrior I"),
+          p("lc-r3-2", "Devotional Warrior", "Deeper hold — 5 breaths", true),
+          p("lc-r3-3", "Pyramid", "Longer hold — let the lateral chain fully release. 5 breaths. This is where we earn the next shape.", true),
+          p("lc-r3-4", "Warrior II", "Bend the front knee, spin the back foot"),
+          p("lc-r3-5", "Peaceful Warrior", undefined, true),
+          p("lc-r3-6", "Triangle", "Gomukhasana arms — top arm bends behind the head, bottom reaches toward the shin, elbow to the ceiling. (Gomukhasana arms in Triangle ONLY — not in ESA.)"),
+          p("lc-r3-7", "Extended Side Angle", "Full bind — the peak. Hold 5–8 breaths. Breathe into the top ribs, the most compressed. No bind? Top arm reaches long. Either way: make the bow.", true),
+          p("lc-r3-8", "Half Moon", "From ESA, shift weight to the front foot, lift the back leg"),
+          p("lc-r3-9", "Chair", "Forward Fold → Chair → Eagle"),
+          p("lc-r3-10", "Eagle", "Signature transition — home base, grounds the peak. Right leg forward = right arm on top."),
+          p("lc-r3-11", "Crow", "⬡ 45-min: skip. Diver's → Crow."),
+          p("lc-r3-12", "Vinyasa"),
+        ],
+      },
+      {
+        id: "lc-floor", title: "Floor series", secondSide: false,
+        poses: [
+          p("lc-fl-1", "Plank", "→ Forearm Plank"),
+          p("lc-fl-2", "Forearm Plank", "5 breaths"),
+          p("lc-fl-3", "Side Plank", "Right side. Stack the hips. You've opened the side body all class — now you hold it.", true),
+          p("lc-fl-4", "Twisted Crescent", "Twisted low lunge — signature transition, flows from Side Plank"),
+          p("lc-fl-5", "Downward Dog"),
+          p("lc-fl-6", "Side Plank", "Left side.", true),
+          p("lc-fl-7", "Twisted Crescent", "Twisted low lunge"),
+          p("lc-fl-8", "Downward Dog", "→ Sphinx → Locust"),
+          p("lc-fl-9", "Sphinx"),
+          p("lc-fl-10", "Locust"),
+          p("lc-fl-11", "Locust", "2 rounds"),
+          p("lc-fl-12", "Bow", "Floor Bow — opens the front body, counterbalances the lateral compression"),
+          p("lc-fl-13", "Bridge", "Standard, or interlace the hands beneath"),
+          p("lc-fl-14", "Wheel", "⬡ 45-min: skip"),
+          p("lc-fl-15", "Constructive Rest", "Knees to chest, sway side to side. 95° room — always reset here before seated after Wheel."),
+          p("lc-fl-16", "Supta Baddhakonasana", "2 min — nervous-system reset, hips open passively before wind-down"),
+        ],
+      },
+      {
+        id: "lc-winddown", title: "Wind-down", secondSide: false,
+        poses: [
+          p("lc-wd-1", "Downward Dog", "Bridge from the floor reset — decompress the spine, set up Pigeon"),
+          p("lc-wd-2", "Pigeon", "Right side.", true),
+          p("lc-wd-3", "Janu Sirsasana", "Right side. Reach the right side long over the shin — the same bow shape we've made all class. Cue laterally, not just forward.", true),
+          p("lc-wd-4", "Downward Dog", "Bridge to the left side"),
+          p("lc-wd-5", "Pigeon", "Left side.", true),
+          p("lc-wd-6", "Janu Sirsasana", "Left side.", true),
+          p("lc-wd-7", "Seated Forward Fold", "Paschimottanasana — 5–8 breaths. Symmetric close; all that lateral work lands here."),
+          p("lc-wd-8", "Supine Twist", "R then L. One last lateral release. The floor holds you now."),
+          p("lc-wd-9", "Savasana", "3+ min"),
+        ],
+      },
+    ],
+  },
+
   // 1 ── Hip freedom: Kapha season, well-worn class taught three times with
   //      notes showing evolution, planned again next week
   {
-    id: "seed-hip-freedom-v4",
+    id: "seed-hip-freedom-v5",
     name: "Hip freedom",
     theme: "Creating space where we hold tension",
     themeType: "season",
@@ -328,7 +477,7 @@ function buildSeedSequences(): SequenceRecord[] {
 
   // 2 ── Heart opener: Anahata chakra, structural sketch, planned in a few days
   {
-    id: "seed-heart-opener-v4",
+    id: "seed-heart-opener-v5",
     name: "Expanding what we can receive",
     theme: "Expanding what we can receive",
     themeType: "chakra",
@@ -379,7 +528,7 @@ function buildSeedSequences(): SequenceRecord[] {
 
   // 3 ── Finding steadiness: Muladhara chakra, quick teaching log entry
   {
-    id: "seed-finding-steadiness-v4",
+    id: "seed-finding-steadiness-v5",
     name: "Finding steadiness",
     theme: "Finding steadiness",
     themeType: "chakra",
@@ -396,7 +545,7 @@ function buildSeedSequences(): SequenceRecord[] {
 
   // 4 ── Kidney meridian: idea in progress, never taught — shows scratch pad + empty dot row
   {
-    id: "seed-kidney-meridian-v4",
+    id: "seed-kidney-meridian-v5",
     name: "",
     theme: "Letting go of what we don't need",
     themeType: "meridian",

@@ -19,6 +19,8 @@ export type TeachStep = {
   cue?: string;
   modifications?: string[];
   bodyRegion?: BodyRegion;
+  /** Marked as carrying the theme — rendered as the left-edge theme spine. */
+  themePose?: boolean;
   /** Identifies the section+side pass this step belongs to (for grouping). */
   passId: string;
   sectionTitle: string;
@@ -53,6 +55,7 @@ function stepsForSide(
       cue: p.cue,
       modifications: meta?.modifications,
       bodyRegion: meta?.bodyRegion,
+      themePose: p.themePose,
       passId,
       sectionTitle: section.title,
       sideLabel,

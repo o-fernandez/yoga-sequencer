@@ -88,6 +88,8 @@ function PoseRow({
   breaths,
   holdMode,
   cue,
+  themePose,
+  isPeak,
 }: {
   pose: string;
   sanskrit?: string;
@@ -95,15 +97,32 @@ function PoseRow({
   breaths?: number;
   holdMode?: boolean;
   cue?: string;
+  themePose?: boolean;
+  isPeak?: boolean;
 }) {
+  // Theme spine: a left-edge accent that lets the teacher scan the through-line
+  // of the class — a thin rail on theme poses, a stronger block on the peak.
   return (
-    <li className="py-5">
+    <li className="relative py-5 pl-5">
+      {(themePose || isPeak) && (
+        <span
+          aria-hidden
+          className={`absolute left-0 top-4 bottom-4 rounded-full ${
+            isPeak ? "w-1.5 bg-amber-500" : "w-1 bg-amber-300/70"
+          }`}
+        />
+      )}
       <div className="flex items-start justify-between gap-4">
         <h3 className="text-2xl font-medium leading-snug text-stone-900">
           {pose}
           {sanskrit && (
             <span className="ml-2 text-base font-normal italic text-stone-400">
               {sanskrit}
+            </span>
+          )}
+          {isPeak && (
+            <span className="ml-2 align-middle text-[11px] font-medium uppercase tracking-[0.18em] text-amber-600/80">
+              peak
             </span>
           )}
         </h3>
@@ -160,7 +179,7 @@ function SectionStrip({ passes }: { passes: TeachPass[] }) {
   );
 }
 
-function RunningOrder({ passes }: { passes: TeachPass[] }) {
+function RunningOrder({ passes, peakPose }: { passes: TeachPass[]; peakPose?: string }) {
   return (
     <div className="space-y-10">
       {passes.map((pass) => (
@@ -188,6 +207,8 @@ function RunningOrder({ passes }: { passes: TeachPass[] }) {
                 breaths={step.breaths}
                 holdMode={step.holdMode}
                 cue={step.cue}
+                themePose={step.themePose}
+                isPeak={Boolean(peakPose) && step.pose === peakPose}
               />
             ))}
           </ul>
@@ -283,7 +304,7 @@ export default function TeachPage() {
               <div className="mt-8">
                 <LastTimeNote sequence={sequence} />
                 <SectionStrip passes={passes} />
-                <RunningOrder passes={passes} />
+                <RunningOrder passes={passes} peakPose={sequence.peakPose} />
               </div>
             )}
           </>
