@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   generateId,
   loadSequence,
+  loadSequences,
   localTodayISO,
   saveSequence,
   normalizePoseItem,
@@ -28,6 +29,7 @@ import {
   type PoseMeta,
 } from "@/lib/poses";
 import { searchPoses } from "@/lib/pose-matcher";
+import { buildPoseMemory, poseMemoryNote, type PoseMemoryNote } from "@/lib/pose-memory";
 import { abbreviatePose } from "@/lib/pose-abbreviations";
 import { BulkPoseEntry } from "@/components/bulk-pose-entry";
 import {
@@ -433,7 +435,7 @@ function SequenceAuditPanel({
   );
 }
 
-function PoseRow({ meta, onAdd }: { meta: PoseMeta; onAdd: () => void }) {
+function PoseRow({ meta, note, onAdd }: { meta: PoseMeta; note?: PoseMemoryNote | null; onAdd: () => void }) {
   const regionClasses = getBodyRegionClasses(meta.bodyRegion);
   const chips = meta.bodyTargets.slice(0, 2);
   return (
@@ -453,6 +455,11 @@ function PoseRow({ meta, onAdd }: { meta: PoseMeta; onAdd: () => void }) {
         </div>
         <span className="shrink-0 text-xs text-stone-500">{meta.duration}</span>
       </div>
+      {note && (
+        <p className={`mt-1 text-[11px] italic ${note.tone === "cold" ? "text-amber-700/70" : "text-stone-400"}`}>
+          {note.text}
+        </p>
+      )}
       {chips.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {chips.map((t) => (
@@ -483,6 +490,9 @@ function AddPoseModal({
   const [search, setSearch] = useState("");
 
   const query = search.trim().toLowerCase();
+
+  // Teaching memory across the whole library — quiet "cold" / "new" nudges.
+  const memory = useMemo(() => buildPoseMemory(loadSequences()), []);
 
   const rankedPoses: PoseMeta[] = (() => {
     if (!query) return [];
@@ -590,6 +600,7 @@ function AddPoseModal({
                   <PoseRow
                     key={meta.pose}
                     meta={meta}
+                    note={poseMemoryNote(meta.pose, memory, true)}
                     onAdd={() => onAdd(targetSection.id, { pose: meta.pose, duration: meta.duration, minutes: meta.minutes })}
                   />
                 ))}
@@ -607,6 +618,7 @@ function AddPoseModal({
                       <PoseRow
                         key={meta.pose}
                         meta={meta}
+                        note={poseMemoryNote(meta.pose, memory, false)}
                         onAdd={() => onAdd(targetSection.id, { pose: meta.pose, duration: meta.duration, minutes: meta.minutes })}
                       />
                     ))}

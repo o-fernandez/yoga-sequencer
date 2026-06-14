@@ -8,10 +8,12 @@ import {
   loadSequences,
   deleteSequence,
   duplicateSequence,
+  generateId,
   isExampleSequence,
   localTodayISO,
   removeExampleSequences,
   resetSequencesToSeeds,
+  saveSequence,
   type SequenceRecord,
   type ThemeType,
 } from "@/lib/sequences";
@@ -602,9 +604,11 @@ function SequenceCard({
 function InspirationCard({
   entry,
   onOpen,
+  onStartClass,
 }: {
   entry: InspirationEntry;
   onOpen: () => void;
+  onStartClass: () => void;
 }) {
   const excerpt = entry.note.trim().slice(0, 100) + (entry.note.trim().length > 100 ? "…" : "");
 
@@ -637,6 +641,16 @@ function InspirationCard({
       <p className="mt-2 text-[14px] italic leading-relaxed text-stone-700">
         {excerpt}
       </p>
+      <div className="mt-3 flex justify-end border-t border-purple-200/40 pt-2.5">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onStartClass(); }}
+          className="inline-flex items-center gap-1 text-[12px] text-purple-700/80 transition hover:text-purple-800"
+        >
+          Start a class from this
+          <span aria-hidden>→</span>
+        </button>
+      </div>
     </article>
   );
 }
@@ -1231,6 +1245,24 @@ export default function LibraryPage() {
     reloadInspirations();
   });
 
+  const handleStartClassFromInspiration = useCallback((entry: InspirationEntry) => {
+    const now = new Date().toISOString();
+    const noteBody = entry.source
+      ? `${entry.note.trim()}\n\n— from ${entry.source}`
+      : entry.note.trim();
+    const id = generateId();
+    saveSequence({
+      id,
+      name: "",
+      notes: noteBody,
+      dates: [],
+      createdAt: now,
+      updatedAt: now,
+      sections: [{ id: generateId(), title: "New section", secondSide: false, poses: [] }],
+    });
+    router.push(`/sequence/${id}`);
+  }, [router]);
+
   const handleRemoveExamples = () => {
     removeExampleSequences();
     removeExampleInspirations();
@@ -1353,6 +1385,7 @@ export default function LibraryPage() {
                 key={entry.id}
                 entry={entry}
                 onOpen={() => setEditingInspiration(entry)}
+                onStartClass={() => handleStartClassFromInspiration(entry)}
               />
             ))}
           </div>
