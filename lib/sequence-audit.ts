@@ -313,12 +313,23 @@ export function auditSequence({
     });
   }
 
-  if (standingMinutes > 22) {
+  // A building-rounds class (≥2 "Round" sections) front-loads standing work by
+  // design — the rounds ARE the class — so the flat single-series thresholds
+  // misfire. Relax them; the wind-down and total-time checks still guard the
+  // landing if the rounds genuinely crowd it out.
+  const buildingRoundsCount = realSections.filter((s) => s.title.toLowerCase().includes("round")).length;
+  const isBuildingRounds = buildingRoundsCount >= 2;
+  const standingWarnAt = isBuildingRounds ? 40 : 22;
+  const standingCritAt = isBuildingRounds ? 48 : 26;
+
+  if (standingMinutes > standingWarnAt) {
     addIssue(issues, {
       id: "pacing-standing-heavy",
-      severity: standingMinutes > 26 ? "critical" : "warning",
+      severity: standingMinutes > standingCritAt ? "critical" : "warning",
       category: "Pacing",
-      title: "Standing work is carrying too much weight",
+      title: isBuildingRounds
+        ? "The rounds are carrying a lot"
+        : "Standing work is carrying too much weight",
       detail: `${Math.round(standingMinutes)} minutes in standing work risks rushing the floor and close. ${
         themeNames.length > 0
           ? `Trim a pose that isn't carrying the theme — keep ${themeNames.slice(0, 3).join(", ")}.`
@@ -374,14 +385,27 @@ export function auditSequence({
   }
 
   for (const section of realSections) {
-    const sideDependentCount = section.poses.filter((pose) => SIDE_DEPENDENT_POSES.has(pose.pose)).length;
-    if (!section.secondSide && sideDependentCount >= 2) {
+    if (section.secondSide) continue;
+    // Count side-dependent poses by name. A pose written out an even number of
+    // times is already covered on both sides (e.g. Side Plank R + Side Plank L),
+    // so the section is self-balanced even without the both-sides flag — the app
+    // has no per-side label, so two entries of the same pose is our best signal
+    // that the teacher did right and left. Only an odd count is a genuinely
+    // unpaired side; flag once two or more poses are left hanging.
+    const counts = new Map<string, number>();
+    for (const pose of section.poses) {
+      if (SIDE_DEPENDENT_POSES.has(pose.pose)) {
+        counts.set(pose.pose, (counts.get(pose.pose) ?? 0) + 1);
+      }
+    }
+    const unpaired = [...counts.values()].filter((count) => count % 2 === 1).length;
+    if (unpaired >= 2) {
       addIssue(issues, {
         id: `balance-${section.id}`,
         severity: "warning",
         category: "Balance",
         title: `${section.title} looks one-sided`,
-        detail: `${sideDependentCount} poses in this section usually need a second side. If this is a right/left flow, mark it as both sides.`,
+        detail: `${unpaired} poses in this section usually need a second side. If this is a right/left flow, mark it as both sides — or write the second side in.`,
         action: { kind: "mark_both_sides", label: "Mark both sides", sectionId: section.id },
       });
     }
