@@ -8,6 +8,8 @@ import {
   loadSequences,
   deleteSequence,
   duplicateSequence,
+  dismissExamplesNotice,
+  examplesNoticeDismissed,
   generateId,
   isExampleSequence,
   localTodayISO,
@@ -835,9 +837,9 @@ function EmptyState({ onRestore }: { onRestore: () => void }) {
 
 // ─── Example management ──────────────────────────────────────────────────────
 
-function ExamplesNotice({ onRemove }: { onRemove: () => void }) {
+function ExamplesNotice({ onRemove, onDismiss }: { onRemove: () => void; onDismiss: () => void }) {
   return (
-    <div className="mb-5 border-l-2 border-stone-300/60 pl-4">
+    <div className="relative mb-5 border-l-2 border-stone-300/60 py-0.5 pl-4 pr-8">
       <p className="font-display text-sm italic leading-relaxed text-stone-500">
         The classes marked &ldquo;Example&rdquo; are here to show how the journal works.
       </p>
@@ -849,8 +851,26 @@ function ExamplesNotice({ onRemove }: { onRemove: () => void }) {
         >
           Remove them
         </button>{" "}
-        whenever you&rsquo;re ready.
+        whenever you&rsquo;re ready, or{" "}
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="underline underline-offset-2 transition hover:text-stone-600"
+        >
+          keep them and hide this
+        </button>
+        .
       </p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Hide this notice and keep the examples"
+        className="absolute right-0 top-0 flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-600"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
+          <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -1285,6 +1305,7 @@ export default function LibraryPage() {
   const [editingInspiration, setEditingInspiration] = useState<InspirationEntry | null>(null);
   const [removeExamplesOpen, setRemoveExamplesOpen] = useState(false);
   const [startOverOpen, setStartOverOpen] = useState(false);
+  const [noticeDismissed, setNoticeDismissed] = useState(true);
 
   const selectionMode = selectedIds.size > 0;
   const upcoming = upcomingTeachingItems(sequences);
@@ -1299,6 +1320,7 @@ export default function LibraryPage() {
         [...loadInspirations()].sort((a, b) => b.date.localeCompare(a.date))
       );
       setCues(allCues());
+      setNoticeDismissed(examplesNoticeDismissed());
       setLoaded(true);
     };
     reload();
@@ -1418,12 +1440,18 @@ export default function LibraryPage() {
     setRemoveExamplesOpen(false);
   };
 
+  const handleDismissNotice = () => {
+    dismissExamplesNotice();
+    setNoticeDismissed(true);
+  };
+
   const handleStartOver = () => {
     resetSequencesToSeeds();
     resetInspirationsToSeeds();
     reloadSequences();
     reloadInspirations();
     clearSelection();
+    setNoticeDismissed(false);
     setStartOverOpen(false);
   };
 
@@ -1509,8 +1537,11 @@ export default function LibraryPage() {
                   onOpen={(id) => router.push(`/sequence/${id}`)}
                 />
               )}
-              {exampleClassCount > 0 && !selectionMode && (
-                <ExamplesNotice onRemove={() => setRemoveExamplesOpen(true)} />
+              {exampleClassCount > 0 && !selectionMode && !noticeDismissed && (
+                <ExamplesNotice
+                  onRemove={() => setRemoveExamplesOpen(true)}
+                  onDismiss={handleDismissNotice}
+                />
               )}
               {selectionMode && (
                 <p className="mb-3 text-xs text-stone-400">

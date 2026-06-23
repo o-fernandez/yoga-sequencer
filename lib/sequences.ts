@@ -118,6 +118,7 @@ const STORAGE_KEY = "yoga-sequences";
 const SEEDS_VERSION = 5;
 const SEEDS_VERSION_KEY = "yoga-seeds-version";
 const EXAMPLES_CLEARED_KEY = "yoga-examples-cleared";
+const EXAMPLES_NOTICE_DISMISSED_KEY = "yoga-examples-notice-dismissed";
 const OLD_SEED_IDS = new Set([
   "seed-shoulder-opening", "seed-grounding-flow", "seed-hip-opening-45",            // v1
   "seed-hip-freedom", "seed-heart-opener", "seed-finding-steadiness",               // v2
@@ -200,6 +201,18 @@ export function examplesCleared(): boolean {
   return localStorage.getItem(EXAMPLES_CLEARED_KEY) === "1";
 }
 
+/** True once the user has dismissed the examples notice but kept the examples. */
+export function examplesNoticeDismissed(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(EXAMPLES_NOTICE_DISMISSED_KEY) === "1";
+}
+
+/** Hide the examples notice for good while leaving the example classes in place. */
+export function dismissExamplesNotice(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(EXAMPLES_NOTICE_DISMISSED_KEY, "1");
+}
+
 /** Remove all example classes, keep the user's own, and suppress future seeding. */
 export function removeExampleSequences(): void {
   if (typeof window === "undefined") return;
@@ -213,6 +226,7 @@ export function removeExampleSequences(): void {
 export function resetSequencesToSeeds(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(EXAMPLES_CLEARED_KEY);
+  localStorage.removeItem(EXAMPLES_NOTICE_DISMISSED_KEY);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(buildSeedSequences().map(migrateRecord)));
   localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
 }
