@@ -1,7 +1,8 @@
 import { loadSequences, localTodayISO, saveSequence, migrateRecord, type SequenceRecord } from "./sequences";
 import { loadInspirations, saveInspiration, type InspirationEntry } from "./inspirations";
+import { loadCues, saveCue, type CueEntry } from "./cues";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const BACKUP_TS_KEY = "yoga-backup-last";
 
 type BackupEnvelope = {
@@ -10,6 +11,8 @@ type BackupEnvelope = {
   sequences: SequenceRecord[];
   /** Added in schema v2; v1 backups won't have it. */
   inspirations?: InspirationEntry[];
+  /** Added in schema v3; older backups won't have it. */
+  cues?: CueEntry[];
 };
 
 export function exportBackup(): void {
@@ -18,6 +21,7 @@ export function exportBackup(): void {
     exportedAt: new Date().toISOString(),
     sequences: loadSequences(),
     inspirations: loadInspirations(),
+    cues: loadCues(),
   };
   const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -34,8 +38,11 @@ export type ImportPreview = {
   toUpdate: number;
   inspirationsToAdd: number;
   inspirationsToUpdate: number;
+  cuesToAdd: number;
+  cuesToUpdate: number;
   records: SequenceRecord[];
   inspirations: InspirationEntry[];
+  cues: CueEntry[];
 };
 
 export function parseBackupFile(text: string): ImportPreview {
@@ -59,6 +66,7 @@ export function parseBackupFile(text: string): ImportPreview {
   const envelope = parsed as BackupEnvelope;
   const records = envelope.sequences.map(migrateRecord);
   const inspirations = Array.isArray(envelope.inspirations) ? envelope.inspirations : [];
+  const cues = Array.isArray(envelope.cues) ? envelope.cues : [];
 
   const existing = loadSequences();
   const existingIds = new Set(existing.map((s) => s.id));
@@ -69,7 +77,21 @@ export function parseBackupFile(text: string): ImportPreview {
   const inspirationsToAdd = inspirations.filter((e) => !existingInspirationIds.has(e.id)).length;
   const inspirationsToUpdate = inspirations.filter((e) => existingInspirationIds.has(e.id)).length;
 
-  return { toAdd, toUpdate, inspirationsToAdd, inspirationsToUpdate, records, inspirations };
+  const existingCueIds = new Set(loadCues().map((c) => c.id));
+  const cuesToAdd = cues.filter((c) => !existingCueIds.has(c.id)).length;
+  const cuesToUpdate = cues.filter((c) => existingCueIds.has(c.id)).length;
+
+  return {
+    toAdd,
+    toUpdate,
+    inspirationsToAdd,
+    inspirationsToUpdate,
+    cuesToAdd,
+    cuesToUpdate,
+    records,
+    inspirations,
+    cues,
+  };
 }
 
 export function applyImport(preview: ImportPreview): void {
@@ -78,6 +100,9 @@ export function applyImport(preview: ImportPreview): void {
   }
   for (const entry of preview.inspirations) {
     saveInspiration(entry);
+  }
+  for (const cue of preview.cues) {
+    saveCue(cue);
   }
 }
 

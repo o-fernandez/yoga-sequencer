@@ -35,6 +35,7 @@ import {
   resetInspirationsToSeeds,
   type InspirationEntry,
 } from "@/lib/inspirations";
+import { allCues, updateCue, deleteCue, type CueEntry } from "@/lib/cues";
 
 const AYURVEDIC_SEASONS = ['Vata', 'Kapha', 'Pitta'];
 
@@ -969,6 +970,137 @@ function InspirationsEmptyState({ onNew }: { onNew: () => void }) {
   );
 }
 
+function CuesEmptyState() {
+  return (
+    <div className="rounded-3xl border border-dashed border-stone-300 bg-white/60 px-8 py-16 text-center">
+      <p className="text-sm text-stone-500">Your cue library is empty.</p>
+      <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-stone-400">
+        Every cue you write onto a pose is quietly kept here, in your own words —
+        ready to reuse, or to vary when a pose comes back around.
+      </p>
+    </div>
+  );
+}
+
+/** One remembered cue: the pose it was written for, tap the words to reword or remove. */
+function CueRow({
+  entry,
+  onEdit,
+  onDelete,
+}: {
+  entry: CueEntry;
+  onEdit: (id: string, text: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(entry.text);
+
+  const startEditing = () => { setDraft(entry.text); setEditing(true); };
+  const save = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== entry.text) onEdit(entry.id, trimmed);
+    setEditing(false);
+  };
+
+  return (
+    <article className="rounded-2xl border border-stone-200/70 bg-white/70 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <p className="text-[11px] uppercase tracking-[0.15em] text-stone-400">{entry.pose}</p>
+      {editing ? (
+        <div className="mt-1.5">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
+              if (e.key === "Escape") setEditing(false);
+            }}
+            rows={2}
+            autoFocus
+            className="w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-[14px] leading-relaxed text-stone-800 focus:border-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-200"
+          />
+          <div className="mt-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => onDelete(entry.id)}
+              className="text-[13px] text-rose-500 transition hover:text-rose-700"
+            >
+              Delete
+            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-stone-500 transition hover:bg-stone-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                className="rounded-full bg-stone-800 px-4 py-1.5 text-[13px] font-medium text-stone-100 transition hover:bg-stone-700"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={startEditing}
+          className="mt-1 block w-full text-left text-[14px] italic leading-relaxed text-stone-700 transition hover:text-stone-900"
+        >
+          {entry.text}
+        </button>
+      )}
+    </article>
+  );
+}
+
+function CuesView({
+  cues,
+  query,
+  onQueryChange,
+  onEdit,
+  onDelete,
+}: {
+  cues: CueEntry[];
+  query: string;
+  onQueryChange: (q: string) => void;
+  onEdit: (id: string, text: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? cues.filter(
+        (c) => c.text.toLowerCase().includes(q) || c.pose.toLowerCase().includes(q),
+      )
+    : cues;
+
+  return (
+    <div>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => onQueryChange(e.target.value)}
+        placeholder="Search your cues…"
+        className="mb-4 w-full rounded-full border border-stone-200 bg-white/70 px-4 py-2.5 text-[14px] text-stone-800 placeholder:text-stone-400 focus:border-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-200"
+      />
+      {filtered.length === 0 ? (
+        <p className="py-12 text-center text-sm text-stone-400">
+          No cues match &ldquo;{query.trim()}&rdquo;.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((entry) => (
+            <CueRow key={entry.id} entry={entry} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ImportModal({
   preview,
   onConfirm,
@@ -983,6 +1115,8 @@ function ImportModal({
   if (preview.toUpdate > 0) parts.push(`update ${preview.toUpdate}`);
   const inspirationCount = preview.inspirationsToAdd + preview.inspirationsToUpdate;
   if (inspirationCount > 0) parts.push(`restore ${inspirationCount} inspiration${inspirationCount === 1 ? "" : "s"}`);
+  const cueCount = preview.cuesToAdd + preview.cuesToUpdate;
+  if (cueCount > 0) parts.push(`restore ${cueCount} cue${cueCount === 1 ? "" : "s"}`);
   const summary = parts.length > 0 ? parts.join(" and ") : "no changes";
 
   return createPortal(
@@ -1143,8 +1277,10 @@ export default function LibraryPage() {
   const [sequences, setSequences] = useState<SequenceRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<"classes" | "inspirations">("classes");
+  const [activeTab, setActiveTab] = useState<"classes" | "inspirations" | "cues">("classes");
   const [inspirations, setInspirations] = useState<InspirationEntry[]>([]);
+  const [cues, setCues] = useState<CueEntry[]>([]);
+  const [cueQuery, setCueQuery] = useState("");
   const [captureOpen, setCaptureOpen] = useState(false);
   const [editingInspiration, setEditingInspiration] = useState<InspirationEntry | null>(null);
   const [removeExamplesOpen, setRemoveExamplesOpen] = useState(false);
@@ -1162,6 +1298,7 @@ export default function LibraryPage() {
       setInspirations(
         [...loadInspirations()].sort((a, b) => b.date.localeCompare(a.date))
       );
+      setCues(allCues());
       setLoaded(true);
     };
     reload();
@@ -1174,6 +1311,16 @@ export default function LibraryPage() {
     setInspirations(
       [...loadInspirations()].sort((a, b) => b.date.localeCompare(a.date))
     );
+  }, []);
+
+  const handleCueEdited = useCallback((id: string, text: string) => {
+    updateCue(id, text);
+    setCues(allCues());
+  }, []);
+
+  const handleCueDeleted = useCallback((id: string) => {
+    deleteCue(id);
+    setCues((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
   const toggleSelect = (id: string) => {
@@ -1299,7 +1446,7 @@ export default function LibraryPage() {
                 >
                   + New class
                 </Link>
-              ) : (
+              ) : activeTab === "inspirations" ? (
                 <button
                   type="button"
                   onClick={() => setCaptureOpen(true)}
@@ -1307,7 +1454,7 @@ export default function LibraryPage() {
                 >
                   + New inspiration
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -1334,6 +1481,17 @@ export default function LibraryPage() {
               }`}
             >
               Inspirations
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveTab("cues"); clearSelection(); }}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                activeTab === "cues"
+                  ? "bg-white text-stone-800 shadow-sm"
+                  : "text-stone-500 hover:text-stone-700"
+              }`}
+            >
+              Cues
             </button>
           </div>
         </header>
@@ -1376,19 +1534,31 @@ export default function LibraryPage() {
               </div>
             </>
           )
-        ) : inspirations.length === 0 ? (
-          <InspirationsEmptyState onNew={() => setCaptureOpen(true)} />
+        ) : activeTab === "inspirations" ? (
+          inspirations.length === 0 ? (
+            <InspirationsEmptyState onNew={() => setCaptureOpen(true)} />
+          ) : (
+            <div className="space-y-3">
+              {inspirations.map((entry) => (
+                <InspirationCard
+                  key={entry.id}
+                  entry={entry}
+                  onOpen={() => setEditingInspiration(entry)}
+                  onStartClass={() => handleStartClassFromInspiration(entry)}
+                />
+              ))}
+            </div>
+          )
+        ) : cues.length === 0 ? (
+          <CuesEmptyState />
         ) : (
-          <div className="space-y-3">
-            {inspirations.map((entry) => (
-              <InspirationCard
-                key={entry.id}
-                entry={entry}
-                onOpen={() => setEditingInspiration(entry)}
-                onStartClass={() => handleStartClassFromInspiration(entry)}
-              />
-            ))}
-          </div>
+          <CuesView
+            cues={cues}
+            query={cueQuery}
+            onQueryChange={setCueQuery}
+            onEdit={handleCueEdited}
+            onDelete={handleCueDeleted}
+          />
         )}
 
         {loaded && activeTab === "classes" && (

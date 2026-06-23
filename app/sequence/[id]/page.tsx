@@ -30,6 +30,7 @@ import {
 } from "@/lib/poses";
 import { searchPoses } from "@/lib/pose-matcher";
 import { buildPoseMemory, poseMemoryNote, type PoseMemoryNote } from "@/lib/pose-memory";
+import { rememberCue, cuesForPose, type CueEntry } from "@/lib/cues";
 import { abbreviatePose } from "@/lib/pose-abbreviations";
 import { BulkPoseEntry } from "@/components/bulk-pose-entry";
 import {
@@ -155,6 +156,55 @@ function PoseCueField({
     >
       Add cue
     </button>
+  );
+}
+
+/**
+ * Past cues the teacher has written for this same pose — so a repeat in a later
+ * round can be varied instead of repeated. Tapping one drops it into the cue.
+ * Stays silent unless there's a different past wording to offer.
+ */
+function PoseCueSuggestions({
+  pose,
+  currentCue,
+  onApply,
+}: {
+  pose: string;
+  currentCue?: string;
+  onApply: (text: string) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<CueEntry[]>([]);
+
+  useEffect(() => {
+    const current = (currentCue ?? "").trim().toLowerCase();
+    setSuggestions(
+      cuesForPose(pose)
+        .filter((c) => c.text.trim().toLowerCase() !== current)
+        .slice(0, 4),
+    );
+  }, [pose, currentCue]);
+
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className="mt-2.5">
+      <p className="font-display text-[11px] italic text-stone-400">
+        You&rsquo;ve cued this before
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {suggestions.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onApply(c.text); }}
+            title="Use this cue"
+            className="max-w-full truncate rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-left text-[11px] italic text-stone-500 transition hover:border-stone-300 hover:bg-white hover:text-stone-700"
+          >
+            {c.text}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1416,6 +1466,11 @@ function CompactSectionBlock({
                   compact
                   onSave={(cue) => onUpdateCue(openPose.id, cue)}
                 />
+                <PoseCueSuggestions
+                  pose={openPose.pose}
+                  currentCue={openPose.cue}
+                  onApply={(text) => onUpdateCue(openPose.id, text)}
+                />
               </div>
               {openPose.id === peakPoseId && peakReadiness && (
                 <PeakReadinessNote readiness={peakReadiness} onAddPrep={onAddPrep} />
@@ -1737,6 +1792,12 @@ export default function BuilderPage() {
 
   const updatePoseCue = (poseId: string, cue: string) => {
     const nextCue = cue || undefined;
+    // Quietly keep genuinely-written cues in the library. Skip no-op blurs
+    // (re-saving the same words) so recency/frequency stays honest.
+    const existing = sections.flatMap((s) => s.poses).find((p) => p.id === poseId);
+    if (nextCue && existing && nextCue !== existing.cue) {
+      rememberCue(existing.pose, nextCue);
+    }
     updateSections((prev) =>
       prev.map((s) => ({
         ...s,
