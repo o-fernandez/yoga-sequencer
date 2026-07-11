@@ -154,6 +154,19 @@ export function getLastBackupAt(): string | null {
   return localStorage.getItem(BACKUP_TS_KEY);
 }
 
+const DATA_CARD_DISMISSED_KEY = "yoga-data-card-dismissed";
+
+/** Device-local: the "keep your work safe" card was waved away with "not now". */
+export function dataCardDismissed(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(DATA_CARD_DISMISSED_KEY) === "1";
+}
+
+export function dismissDataCard(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(DATA_CARD_DISMISSED_KEY, "1");
+}
+
 export function formatLastBackup(iso: string | null): string {
   if (!iso) return "Never backed up";
   const diff = Date.now() - new Date(iso).getTime();
