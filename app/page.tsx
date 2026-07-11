@@ -1253,15 +1253,69 @@ function formatLastSynced(iso: string | null): string {
   return `synced ${days} days ago`;
 }
 
+function copyViaExecCommand(text: string): boolean {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "absolute";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Copy with fallbacks. The synchronous execCommand path runs FIRST: in
+ * embedded browsers and webviews, navigator.clipboard.writeText can hang
+ * forever on a permission that never resolves (not reject — hang), and by the
+ * time any timeout fires the click's user activation may be spent. execCommand
+ * is deprecated but synchronous, so it runs while the activation is certainly
+ * live. The async API is the backup, raced against a timeout so a hang reads
+ * as failure instead of silence. Returns whether anything actually copied.
+ */
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (copyViaExecCommand(text)) return true;
+  try {
+    return await Promise.race([
+      navigator.clipboard.writeText(text).then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 800)),
+    ]);
+  } catch {
+    return false;
+  }
+}
+
+/** Select an element's full text — so a failed copy is one keystroke from a manual one. */
+function selectContents(el: HTMLElement | null): void {
+  if (!el) return;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 /** Shows the sync link for safekeeping — the user's only way back in. */
 function SyncLinkModal({ token, onClose }: { token: string; onClose: () => void }) {
   const link = syncLink(token);
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(link).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  const linkRef = useRef<HTMLParagraphElement>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const copy = async () => {
+    const ok = await copyTextToClipboard(link);
+    if (ok) {
+      setCopyState("copied");
+      setTimeout(() => setCopyState("idle"), 2000);
+    } else {
+      // Leave the link selected so the user can copy it themselves.
+      selectContents(linkRef.current);
+      setCopyState("failed");
+    }
   };
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-sm">
@@ -1272,16 +1326,26 @@ function SyncLinkModal({ token, onClose }: { token: string; onClose: () => void 
           way back in. Save it somewhere safe, and treat it like a password:
           anyone holding it can see and change your classes.
         </p>
-        <p className="mt-3 break-all rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-[12px] text-stone-600">
+        <p
+          ref={linkRef}
+          onClick={() => selectContents(linkRef.current)}
+          className="mt-3 cursor-text break-all rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-[12px] text-stone-600 select-all"
+        >
           {link}
         </p>
+        {copyState === "failed" && (
+          <p className="mt-2 text-[12px] text-amber-700/80">
+            Copying isn&apos;t available in this browser — the link is selected above,
+            copy it with {typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘C" : "Ctrl+C"}.
+          </p>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
-            onClick={copy}
+            onClick={() => void copy()}
             className="rounded-full px-4 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100"
           >
-            {copied ? "Copied" : "Copy link"}
+            {copyState === "copied" ? "Copied" : "Copy link"}
           </button>
           <button
             type="button"
@@ -1355,12 +1419,18 @@ function ConnectSyncModal({ onClose }: { onClose: () => void }) {
 
 function TurnOffSyncModal({ token, onClose }: { token: string; onClose: () => void }) {
   const [deleteRemote, setDeleteRemote] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(syncLink(token)).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  const linkRef = useRef<HTMLParagraphElement>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const copy = async () => {
+    const ok = await copyTextToClipboard(syncLink(token));
+    if (ok) {
+      setCopyState("copied");
+      setTimeout(() => setCopyState("idle"), 2000);
+    } else {
+      // Can't copy programmatically here — reveal the link for a manual copy.
+      setCopyState("failed");
+      setTimeout(() => selectContents(linkRef.current), 0);
+    }
   };
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-sm">
@@ -1371,13 +1441,22 @@ function TurnOffSyncModal({ token, onClose }: { token: string; onClose: () => vo
           delete the cloud copy, your link keeps working —{" "}
           <button
             type="button"
-            onClick={copy}
+            onClick={() => void copy()}
             className="underline underline-offset-2 transition hover:text-stone-700"
           >
-            {copied ? "copied" : "copy it now"}
+            {copyState === "copied" ? "copied" : "copy it now"}
           </button>{" "}
           if you might want back in later.
         </p>
+        {copyState === "failed" && (
+          <p
+            ref={linkRef}
+            onClick={() => selectContents(linkRef.current)}
+            className="mt-2 cursor-text break-all rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-[12px] text-stone-600 select-all"
+          >
+            {syncLink(token)}
+          </p>
+        )}
         <label className="mt-3 flex items-start gap-2 text-[13px] text-stone-500">
           <input
             type="checkbox"
