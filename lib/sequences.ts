@@ -1,4 +1,6 @@
 import { getPoseMeta } from "./poses";
+import { emitDataChanged } from "./data-changed";
+import { withoutExpiredTombstones } from "./sync-merge";
 
 export type PoseItem = {
   id: string;
@@ -91,6 +93,11 @@ export type SequenceRecord = {
   updatedAt: string;
   sections: Section[];
   showAnalysis?: boolean;
+  /**
+   * Tombstone: set when the class is deleted. Kept (hidden) so device sync can
+   * propagate the deletion instead of resurrecting the record on merge.
+   */
+  deletedAt?: string;
 };
 
 function toLocalISODate(d: Date): string {
@@ -211,24 +218,47 @@ export function examplesNoticeDismissed(): boolean {
 export function dismissExamplesNotice(): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(EXAMPLES_NOTICE_DISMISSED_KEY, "1");
+  emitDataChanged();
+}
+
+/** Restore example flags from a backup or sync envelope. Flags only ever turn on. */
+export function applyExampleFlags(flags?: { examplesCleared?: boolean; examplesNoticeDismissed?: boolean }): void {
+  if (typeof window === "undefined" || !flags) return;
+  if (flags.examplesCleared) localStorage.setItem(EXAMPLES_CLEARED_KEY, "1");
+  if (flags.examplesNoticeDismissed) localStorage.setItem(EXAMPLES_NOTICE_DISMISSED_KEY, "1");
 }
 
 /** Remove all example classes, keep the user's own, and suppress future seeding. */
 export function removeExampleSequences(): void {
   if (typeof window === "undefined") return;
-  const kept = loadSequences().filter((s) => !isExampleSequence(s.id));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(kept));
+  const now = new Date().toISOString();
+  // Tombstone rather than drop, so sync propagates the removal to other devices.
+  const all = loadSequencesRaw().map((s) =>
+    isExampleSequence(s.id) && !s.deletedAt ? { ...s, deletedAt: now, updatedAt: now } : s
+  );
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
   localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
   localStorage.setItem(EXAMPLES_CLEARED_KEY, "1");
+  emitDataChanged();
 }
 
 /** Start over: drop everything and reseed the examples with fresh relative dates. */
 export function resetSequencesToSeeds(): void {
   if (typeof window === "undefined") return;
+  const now = new Date().toISOString();
+  // The user's own classes become tombstones so the reset carries over sync;
+  // examples are rebuilt fresh (same ids as the live seeds, so no tombstones).
+  const tombstones = loadSequencesRaw()
+    .filter((s) => !isExampleSequence(s.id))
+    .map((s) => (s.deletedAt ? s : { ...s, deletedAt: now, updatedAt: now }));
   localStorage.removeItem(EXAMPLES_CLEARED_KEY);
   localStorage.removeItem(EXAMPLES_NOTICE_DISMISSED_KEY);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(buildSeedSequences().map(migrateRecord)));
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify([...buildSeedSequences().map(migrateRecord), ...tombstones])
+  );
   localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
+  emitDataChanged();
 }
 
 /**
@@ -593,7 +623,8 @@ function buildSeedSequences(): SequenceRecord[] {
   ];
 }
 
-export function loadSequences(): SequenceRecord[] {
+/** Every stored record, tombstones included — for sync and backup, which must carry deletions. */
+export function loadSequencesRaw(): SequenceRecord[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -614,7 +645,7 @@ export function loadSequences(): SequenceRecord[] {
       if (!examplesCleared()) records = [...buildSeedSequences(), ...records];
       localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
     }
-    const migrated = records.map(migrateRecord);
+    const migrated = withoutExpiredTombstones(records.map(migrateRecord));
     // Write back if migration changed anything
     if (JSON.stringify(records) !== JSON.stringify(migrated) || storedVersion < SEEDS_VERSION) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
@@ -625,13 +656,25 @@ export function loadSequences(): SequenceRecord[] {
   }
 }
 
+export function loadSequences(): SequenceRecord[] {
+  return loadSequencesRaw().filter((s) => !s.deletedAt);
+}
+
+/** Sync apply: swap in the merged collection wholesale. Doesn't emit a change — the sync engine pushes explicitly after applying. */
+export function replaceAllSequences(records: SequenceRecord[]): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  // The synced collection supersedes seeding; don't inject seeds on top of it.
+  localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
+}
+
 export function loadSequence(id: string): SequenceRecord | null {
   return loadSequences().find((s) => s.id === id) ?? null;
 }
 
 export function saveSequence(record: SequenceRecord): void {
   if (typeof window === "undefined") return;
-  const all = loadSequences();
+  const all = loadSequencesRaw();
   const idx = all.findIndex((s) => s.id === record.id);
   if (idx === -1) {
     all.push(record);
@@ -639,12 +682,17 @@ export function saveSequence(record: SequenceRecord): void {
     all[idx] = record;
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  emitDataChanged();
 }
 
 export function deleteSequence(id: string): void {
   if (typeof window === "undefined") return;
-  const all = loadSequences().filter((s) => s.id !== id);
+  const now = new Date().toISOString();
+  const all = loadSequencesRaw().map((s) =>
+    s.id === id ? { ...s, deletedAt: now, updatedAt: now } : s
+  );
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  emitDataChanged();
 }
 
 export function duplicateSequence(id: string): SequenceRecord | null {

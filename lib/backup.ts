@@ -1,11 +1,31 @@
-import { loadSequences, localTodayISO, saveSequence, migrateRecord, type SequenceRecord } from "./sequences";
-import { loadInspirations, saveInspiration, type InspirationEntry } from "./inspirations";
-import { loadCues, saveCue, type CueEntry } from "./cues";
+import {
+  applyExampleFlags,
+  examplesCleared,
+  examplesNoticeDismissed,
+  loadSequences,
+  loadSequencesRaw,
+  localTodayISO,
+  saveSequence,
+  migrateRecord,
+  type SequenceRecord,
+} from "./sequences";
+import {
+  loadInspirations,
+  loadInspirationsRaw,
+  saveInspiration,
+  type InspirationEntry,
+} from "./inspirations";
+import { loadCues, loadCuesRaw, saveCue, type CueEntry } from "./cues";
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const BACKUP_TS_KEY = "yoga-backup-last";
 
-type BackupEnvelope = {
+export type BackupFlags = {
+  examplesCleared?: boolean;
+  examplesNoticeDismissed?: boolean;
+};
+
+export type BackupEnvelope = {
   schemaVersion: number;
   exportedAt: string;
   sequences: SequenceRecord[];
@@ -13,16 +33,31 @@ type BackupEnvelope = {
   inspirations?: InspirationEntry[];
   /** Added in schema v3; older backups won't have it. */
   cues?: CueEntry[];
+  /**
+   * Added in schema v4: the example-management choices, so a restore (or a
+   * synced device) doesn't re-seed examples the user already dismissed.
+   * Records may also carry `deletedAt` tombstones from v4 on.
+   */
+  flags?: BackupFlags;
 };
 
-export function exportBackup(): void {
-  const envelope: BackupEnvelope = {
+/** Snapshot of everything worth carrying to another device — also the sync payload. */
+export function buildBackupEnvelope(): BackupEnvelope {
+  return {
     schemaVersion: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
-    sequences: loadSequences(),
-    inspirations: loadInspirations(),
-    cues: loadCues(),
+    sequences: loadSequencesRaw(),
+    inspirations: loadInspirationsRaw(),
+    cues: loadCuesRaw(),
+    flags: {
+      examplesCleared: examplesCleared(),
+      examplesNoticeDismissed: examplesNoticeDismissed(),
+    },
   };
+}
+
+export function exportBackup(): void {
+  const envelope = buildBackupEnvelope();
   const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -43,6 +78,7 @@ export type ImportPreview = {
   records: SequenceRecord[];
   inspirations: InspirationEntry[];
   cues: CueEntry[];
+  flags?: BackupFlags;
 };
 
 export function parseBackupFile(text: string): ImportPreview {
@@ -68,18 +104,23 @@ export function parseBackupFile(text: string): ImportPreview {
   const inspirations = Array.isArray(envelope.inspirations) ? envelope.inspirations : [];
   const cues = Array.isArray(envelope.cues) ? envelope.cues : [];
 
+  // Tombstones travel with the file (so restores don't resurrect deletions)
+  // but don't count in the preview — the user only sees living records.
+  const living = records.filter((r) => !r.deletedAt);
   const existing = loadSequences();
   const existingIds = new Set(existing.map((s) => s.id));
-  const toAdd = records.filter((r) => !existingIds.has(r.id)).length;
-  const toUpdate = records.filter((r) => existingIds.has(r.id)).length;
+  const toAdd = living.filter((r) => !existingIds.has(r.id)).length;
+  const toUpdate = living.filter((r) => existingIds.has(r.id)).length;
 
+  const livingInspirations = inspirations.filter((e) => !e.deletedAt);
   const existingInspirationIds = new Set(loadInspirations().map((e) => e.id));
-  const inspirationsToAdd = inspirations.filter((e) => !existingInspirationIds.has(e.id)).length;
-  const inspirationsToUpdate = inspirations.filter((e) => existingInspirationIds.has(e.id)).length;
+  const inspirationsToAdd = livingInspirations.filter((e) => !existingInspirationIds.has(e.id)).length;
+  const inspirationsToUpdate = livingInspirations.filter((e) => existingInspirationIds.has(e.id)).length;
 
+  const livingCues = cues.filter((c) => !c.deletedAt);
   const existingCueIds = new Set(loadCues().map((c) => c.id));
-  const cuesToAdd = cues.filter((c) => !existingCueIds.has(c.id)).length;
-  const cuesToUpdate = cues.filter((c) => existingCueIds.has(c.id)).length;
+  const cuesToAdd = livingCues.filter((c) => !existingCueIds.has(c.id)).length;
+  const cuesToUpdate = livingCues.filter((c) => existingCueIds.has(c.id)).length;
 
   return {
     toAdd,
@@ -91,6 +132,7 @@ export function parseBackupFile(text: string): ImportPreview {
     records,
     inspirations,
     cues,
+    flags: envelope.flags,
   };
 }
 
@@ -104,6 +146,7 @@ export function applyImport(preview: ImportPreview): void {
   for (const cue of preview.cues) {
     saveCue(cue);
   }
+  applyExampleFlags(preview.flags);
 }
 
 export function getLastBackupAt(): string | null {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,6 +28,17 @@ import {
   type ImportPreview,
 } from "@/lib/backup";
 import { getPoseIllustration } from "@/lib/pose-illustrations";
+import {
+  connectWithSyncInput,
+  disconnectSync,
+  enableSync,
+  getServerSyncStatus,
+  getSyncStatus,
+  getSyncToken,
+  subscribeSync,
+  subscribeSyncApplied,
+  syncLink,
+} from "@/lib/sync";
 import {
   loadInspirations,
   saveInspiration,
@@ -1229,6 +1240,255 @@ function useImportBackup(onImported: () => void) {
   return { openPicker, error, elements };
 }
 
+// ─── Device sync ──────────────────────────────────────────────────────────────
+
+function formatLastSynced(iso: string | null): string {
+  if (!iso) return "not synced yet";
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000) return "synced just now";
+  if (diff < 3_600_000) return `synced ${Math.floor(diff / 60_000)}m ago`;
+  const days = Math.floor(diff / 86_400_000);
+  if (days === 0) return "synced today";
+  if (days === 1) return "synced yesterday";
+  return `synced ${days} days ago`;
+}
+
+/** Shows the sync link for safekeeping — the user's only way back in. */
+function SyncLinkModal({ token, onClose }: { token: string; onClose: () => void }) {
+  const link = syncLink(token);
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-sm">
+      <div className="mx-6 w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 shadow-xl">
+        <p className="font-display text-base font-medium text-stone-800">Your sync link</p>
+        <p className="mt-2 text-sm text-stone-500">
+          This link is how you open your library on another device — and the only
+          way back in. Save it somewhere safe, and treat it like a password:
+          anyone holding it can see and change your classes.
+        </p>
+        <p className="mt-3 break-all rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-[12px] text-stone-600">
+          {link}
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={copy}
+            className="rounded-full px-4 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100"
+          >
+            {copied ? "Copied" : "Copy link"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 transition hover:bg-stone-700"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/** Paste a sync link (or bare code) to bring this device into an existing library. */
+function ConnectSyncModal({ onClose }: { onClose: () => void }) {
+  const [input, setInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const connect = async () => {
+    setConnecting(true);
+    setError(null);
+    try {
+      await connectWithSyncInput(input);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't connect — try again.");
+      setConnecting(false);
+    }
+  };
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-sm">
+      <div className="mx-6 w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 shadow-xl">
+        <p className="font-display text-base font-medium text-stone-800">Use a sync link</p>
+        <p className="mt-2 text-sm text-stone-500">
+          Paste the sync link (or code) from your other device. Anything already
+          here is kept — the two libraries merge.
+        </p>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && input.trim()) void connect(); }}
+          placeholder="https://…/#sync=…"
+          autoFocus
+          className="mt-3 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 font-mono text-[12px] text-stone-700 focus:border-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-200"
+        />
+        {error && <p className="mt-2 text-[12px] text-rose-500">{error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full px-4 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void connect()}
+            disabled={connecting || !input.trim()}
+            className="rounded-full bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 transition hover:bg-stone-700 disabled:opacity-50"
+          >
+            {connecting ? "Connecting…" : "Connect"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function TurnOffSyncModal({ token, onClose }: { token: string; onClose: () => void }) {
+  const [deleteRemote, setDeleteRemote] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(syncLink(token)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-sm">
+      <div className="mx-6 w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 shadow-xl">
+        <p className="font-display text-base font-medium text-stone-800">Turn off sync?</p>
+        <p className="mt-2 text-sm text-stone-500">
+          Everything stays on this device; it just stops syncing. Unless you
+          delete the cloud copy, your link keeps working —{" "}
+          <button
+            type="button"
+            onClick={copy}
+            className="underline underline-offset-2 transition hover:text-stone-700"
+          >
+            {copied ? "copied" : "copy it now"}
+          </button>{" "}
+          if you might want back in later.
+        </p>
+        <label className="mt-3 flex items-start gap-2 text-[13px] text-stone-500">
+          <input
+            type="checkbox"
+            checked={deleteRemote}
+            onChange={(e) => setDeleteRemote(e.target.checked)}
+            className="mt-0.5 accent-stone-700"
+          />
+          Also delete the cloud copy (other devices keep their local data but stop syncing)
+        </label>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full px-4 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void disconnectSync(deleteRemote);
+              onClose();
+            }}
+            className="rounded-full bg-rose-700 px-4 py-2 text-sm font-medium text-rose-50 transition hover:bg-rose-800"
+          >
+            Turn off
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/** The quiet sync line in the data footer: state on the left, doors on the right. */
+function SyncRow() {
+  const status = useSyncExternalStore(subscribeSync, getSyncStatus, getServerSyncStatus);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [turnOffOpen, setTurnOffOpen] = useState(false);
+  const [enabling, setEnabling] = useState(false);
+
+  const token = status.enabled ? getSyncToken() : null;
+
+  const handleTurnOn = async () => {
+    setEnabling(true);
+    try {
+      await enableSync();
+      setLinkOpen(true);
+    } finally {
+      setEnabling(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-4 pb-3">
+      {status.enabled && token ? (
+        <>
+          <span className={`text-[13px] ${status.error ? "text-amber-700/70" : "text-stone-400"}`}>
+            {status.syncing
+              ? "Syncing…"
+              : status.error
+                ? "Sync is catching up — changes are safe on this device"
+                : `Synced across your devices · ${formatLastSynced(status.lastSyncedAt)}`}
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setLinkOpen(true)}
+              className="text-[13px] text-stone-400 transition hover:text-stone-600"
+            >
+              Sync link
+            </button>
+            <button
+              type="button"
+              onClick={() => setTurnOffOpen(true)}
+              className="text-[13px] text-stone-400 transition hover:text-stone-600"
+            >
+              Turn off…
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <span className="text-[13px] text-stone-400">On this device only</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void handleTurnOn()}
+              disabled={enabling}
+              className="text-[13px] text-stone-400 transition hover:text-stone-600 disabled:opacity-50"
+            >
+              {enabling ? "Turning on…" : "Sync across devices"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConnectOpen(true)}
+              className="text-[13px] text-stone-400 transition hover:text-stone-600"
+            >
+              I have a sync link
+            </button>
+          </div>
+        </>
+      )}
+      {linkOpen && token && <SyncLinkModal token={token} onClose={() => setLinkOpen(false)} />}
+      {connectOpen && <ConnectSyncModal onClose={() => setConnectOpen(false)} />}
+      {turnOffOpen && token && <TurnOffSyncModal token={token} onClose={() => setTurnOffOpen(false)} />}
+    </div>
+  );
+}
+
 function BackupFooter({
   onImport,
   importError,
@@ -1257,6 +1517,7 @@ function BackupFooter({
 
   return (
     <div className="mt-10 border-t border-stone-300/50 pt-4">
+      <SyncRow />
       <div className="flex items-center justify-between gap-4">
         <span className={`text-[13px] ${stale ? "text-amber-700/70" : "text-stone-400"}`}>
           {formatLastBackup(lastBackup)}
@@ -1393,6 +1654,17 @@ export default function LibraryPage() {
     const all = loadSequences();
     setSequences([...all].sort((a, b) => sortKey(b).localeCompare(sortKey(a))));
   }, []);
+
+  // A sync pull can land data from another device at any time — re-read the lists.
+  useEffect(
+    () =>
+      subscribeSyncApplied(() => {
+        reloadSequences();
+        reloadInspirations();
+        setCues(allCues());
+      }),
+    [reloadSequences, reloadInspirations]
+  );
 
   const handleInspirationSaved = useCallback((saved: InspirationEntry) => {
     setInspirations((prev) => {

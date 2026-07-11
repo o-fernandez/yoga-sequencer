@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 import SWRegister from "./sw-register";
+import SyncBoot from "./sync-boot";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,6 +50,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {children}
         <SWRegister />
+        <SyncBoot />
       </body>
     </html>
   );

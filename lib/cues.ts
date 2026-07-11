@@ -1,4 +1,6 @@
 import { generateId } from "./sequences";
+import { emitDataChanged } from "./data-changed";
+import { withoutExpiredTombstones } from "./sync-merge";
 
 /**
  * A cue the teacher has written, kept for reuse. The library fills itself from
@@ -17,6 +19,8 @@ export type CueEntry = {
   useCount: number;
   /** Last time the cue was applied to a pose — powers "most recent". */
   lastUsedAt: string;
+  /** Tombstone: kept (hidden) so device sync propagates the deletion. */
+  deletedAt?: string;
 };
 
 const KEY = "yoga-cues";
@@ -26,19 +30,31 @@ function normalize(text: string): string {
   return text.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export function loadCues(): CueEntry[] {
+/** Every stored cue, tombstones included — for sync and backup. */
+export function loadCuesRaw(): CueEntry[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as CueEntry[]) : [];
+    return raw ? withoutExpiredTombstones(JSON.parse(raw) as CueEntry[]) : [];
   } catch {
     return [];
   }
 }
 
+export function loadCues(): CueEntry[] {
+  return loadCuesRaw().filter((c) => !c.deletedAt);
+}
+
+/** Sync apply: swap in the merged collection wholesale. Doesn't emit — the sync engine pushes explicitly. */
+export function replaceAllCues(entries: CueEntry[]): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(KEY, JSON.stringify(entries));
+}
+
 function persist(all: CueEntry[]): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(KEY, JSON.stringify(all));
+  emitDataChanged();
 }
 
 /**
@@ -50,13 +66,16 @@ function persist(all: CueEntry[]): void {
 export function rememberCue(pose: string, rawText: string): void {
   const text = rawText.trim();
   if (!text) return;
-  const all = loadCues();
+  const all = loadCuesRaw();
   const key = normalize(text);
   const now = new Date().toISOString();
-  const existing = all.find((c) => c.pose === pose && normalize(c.text) === key);
+  const existing = all.find((c) => !c.deletedAt && c.pose === pose && normalize(c.text) === key);
   if (existing) {
     existing.useCount += 1;
     existing.lastUsedAt = now;
+    // A use is an edit for sync purposes — without this, last-write-wins
+    // merging would discard the bumped counters.
+    existing.updatedAt = now;
   } else {
     all.push({
       id: generateId(),
@@ -99,7 +118,7 @@ export function searchCues(query: string): CueEntry[] {
 
 /** Add or replace a cue by id, preserving its fields — used by backup restore. */
 export function saveCue(entry: CueEntry): void {
-  const all = loadCues();
+  const all = loadCuesRaw();
   const idx = all.findIndex((c) => c.id === entry.id);
   if (idx >= 0) all[idx] = entry;
   else all.push(entry);
@@ -110,7 +129,7 @@ export function saveCue(entry: CueEntry): void {
 export function updateCue(id: string, text: string): void {
   const trimmed = text.trim();
   if (!trimmed) return;
-  const all = loadCues();
+  const all = loadCuesRaw();
   const entry = all.find((c) => c.id === id);
   if (!entry) return;
   entry.text = trimmed;
@@ -120,5 +139,8 @@ export function updateCue(id: string, text: string): void {
 
 /** Remove a cue from the library — saved classes keep theirs untouched. */
 export function deleteCue(id: string): void {
-  persist(loadCues().filter((c) => c.id !== id));
+  const now = new Date().toISOString();
+  persist(
+    loadCuesRaw().map((c) => (c.id === id ? { ...c, deletedAt: now, updatedAt: now } : c))
+  );
 }

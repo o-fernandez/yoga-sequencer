@@ -1,4 +1,6 @@
 import { daysFromToday, examplesCleared, timestampDaysAgo } from "./sequences";
+import { emitDataChanged } from "./data-changed";
+import { withoutExpiredTombstones } from "./sync-merge";
 
 export type InspirationEntry = {
   id: string;
@@ -7,6 +9,8 @@ export type InspirationEntry = {
   date: string; // YYYY-MM-DD
   createdAt: string;
   updatedAt: string;
+  /** Tombstone: kept (hidden) so device sync propagates the deletion. */
+  deletedAt?: string;
 };
 
 const KEY = "yoga-inspirations";
@@ -46,7 +50,8 @@ export function isExampleInspiration(id: string): boolean {
   return id.startsWith("insp-seed-");
 }
 
-export function loadInspirations(): InspirationEntry[] {
+/** Every stored entry, tombstones included — for sync and backup. */
+export function loadInspirationsRaw(): InspirationEntry[] {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) {
@@ -56,35 +61,63 @@ export function loadInspirations(): InspirationEntry[] {
       localStorage.setItem(SEEDS_KEY, "1");
       return seeded;
     }
-    return JSON.parse(raw) as InspirationEntry[];
+    return withoutExpiredTombstones(JSON.parse(raw) as InspirationEntry[]);
   } catch {
     return [];
   }
 }
 
+export function loadInspirations(): InspirationEntry[] {
+  return loadInspirationsRaw().filter((e) => !e.deletedAt);
+}
+
+/** Sync apply: swap in the merged collection wholesale. Doesn't emit — the sync engine pushes explicitly. */
+export function replaceAllInspirations(entries: InspirationEntry[]): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(KEY, JSON.stringify(entries));
+  localStorage.setItem(SEEDS_KEY, "1");
+}
+
 export function saveInspiration(entry: InspirationEntry): void {
-  const all = loadInspirations();
+  const all = loadInspirationsRaw();
   const idx = all.findIndex((e) => e.id === entry.id);
   if (idx >= 0) all[idx] = entry;
   else all.unshift(entry);
   localStorage.setItem(KEY, JSON.stringify(all));
+  emitDataChanged();
 }
 
 export function deleteInspiration(id: string): void {
-  const filtered = loadInspirations().filter((e) => e.id !== id);
-  localStorage.setItem(KEY, JSON.stringify(filtered));
+  const now = new Date().toISOString();
+  const all = loadInspirationsRaw().map((e) =>
+    e.id === id ? { ...e, deletedAt: now, updatedAt: now } : e
+  );
+  localStorage.setItem(KEY, JSON.stringify(all));
+  emitDataChanged();
 }
 
 /** Remove all example inspirations, keeping the user's own. */
 export function removeExampleInspirations(): void {
   if (typeof window === "undefined") return;
-  const kept = loadInspirations().filter((e) => !isExampleInspiration(e.id));
-  localStorage.setItem(KEY, JSON.stringify(kept));
+  const now = new Date().toISOString();
+  // Tombstone rather than drop, so sync propagates the removal to other devices.
+  const all = loadInspirationsRaw().map((e) =>
+    isExampleInspiration(e.id) && !e.deletedAt ? { ...e, deletedAt: now, updatedAt: now } : e
+  );
+  localStorage.setItem(KEY, JSON.stringify(all));
+  emitDataChanged();
 }
 
 /** Start over: drop everything and reseed the example inspirations fresh. */
 export function resetInspirationsToSeeds(): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(buildSeedInspirations()));
+  const now = new Date().toISOString();
+  // The user's own entries become tombstones so the reset carries over sync;
+  // examples are rebuilt fresh (same ids as the live seeds, so no tombstones).
+  const tombstones = loadInspirationsRaw()
+    .filter((e) => !isExampleInspiration(e.id))
+    .map((e) => (e.deletedAt ? e : { ...e, deletedAt: now, updatedAt: now }));
+  localStorage.setItem(KEY, JSON.stringify([...buildSeedInspirations(), ...tombstones]));
   localStorage.setItem(SEEDS_KEY, "1");
+  emitDataChanged();
 }
