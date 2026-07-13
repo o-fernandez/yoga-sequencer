@@ -136,7 +136,8 @@ function roleForSection(section: Section): SectionRole {
   if (title.includes("surya a")) return "surya_a";
   if (title.includes("floor")) return "floor";
   if (title.includes("wind")) return "winddown";
-  if (title.includes("savasana") || title.includes("close")) return "close";
+  // "clos" catches both "Close" and "Closing" (the canonical section title).
+  if (title.includes("savasana") || title.includes("clos")) return "close";
   if (
     title.includes("round") ||
     title.includes("neutral") ||

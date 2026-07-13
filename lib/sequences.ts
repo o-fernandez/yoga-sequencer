@@ -695,6 +695,23 @@ export function deleteSequence(id: string): void {
   emitDataChanged();
 }
 
+/**
+ * Undo for deleteSequence: clear the tombstone and bump updatedAt so the
+ * restore wins the last-write-wins merge on every synced device.
+ */
+export function restoreSequence(id: string): void {
+  if (typeof window === "undefined") return;
+  const now = new Date().toISOString();
+  const all = loadSequencesRaw().map((s) => {
+    if (s.id !== id || !s.deletedAt) return s;
+    const restored = { ...s, updatedAt: now };
+    delete restored.deletedAt;
+    return restored;
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  emitDataChanged();
+}
+
 export function duplicateSequence(id: string): SequenceRecord | null {
   const original = loadSequence(id);
   if (!original) return null;
