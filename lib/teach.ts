@@ -1,5 +1,5 @@
 import type { Section } from "./sequences";
-import { getPoseMeta, type BodyRegion } from "./poses";
+import { getPoseMeta } from "./poses";
 
 /**
  * Teach mode models the running order as a single flat, ordered list of "steps":
@@ -17,8 +17,8 @@ export type TeachStep = {
   breaths?: number;
   holdMode?: boolean;
   cue?: string;
+  /** The pose library's modifications — tap-to-reveal options in the running order. */
   modifications?: string[];
-  bodyRegion?: BodyRegion;
   /** Marked as carrying the theme — rendered as the left-edge theme spine. */
   themePose?: boolean;
   /** Identifies the section+side pass this step belongs to (for grouping). */
@@ -54,7 +54,6 @@ function stepsForSide(
       holdMode: p.holdMode,
       cue: p.cue,
       modifications: meta?.modifications,
-      bodyRegion: meta?.bodyRegion,
       themePose: p.themePose,
       passId,
       sectionTitle: section.title,
