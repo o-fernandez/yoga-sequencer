@@ -14,7 +14,6 @@ export type InspirationEntry = {
 };
 
 const KEY = "yoga-inspirations";
-const SEEDS_KEY = "yoga-inspirations-seeded";
 
 /** Seed dates are relative to first load so the examples stay evergreen. */
 function buildSeedInspirations(): InspirationEntry[] {
@@ -58,7 +57,6 @@ export function loadInspirationsRaw(): InspirationEntry[] {
       if (examplesCleared()) return [];
       const seeded = buildSeedInspirations();
       localStorage.setItem(KEY, JSON.stringify(seeded));
-      localStorage.setItem(SEEDS_KEY, "1");
       return seeded;
     }
     return withoutExpiredTombstones(JSON.parse(raw) as InspirationEntry[]);
@@ -75,7 +73,6 @@ export function loadInspirations(): InspirationEntry[] {
 export function replaceAllInspirations(entries: InspirationEntry[]): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(KEY, JSON.stringify(entries));
-  localStorage.setItem(SEEDS_KEY, "1");
 }
 
 export function saveInspiration(entry: InspirationEntry): void {
@@ -118,6 +115,5 @@ export function resetInspirationsToSeeds(): void {
     .filter((e) => !isExampleInspiration(e.id))
     .map((e) => (e.deletedAt ? e : { ...e, deletedAt: now, updatedAt: now }));
   localStorage.setItem(KEY, JSON.stringify([...buildSeedInspirations(), ...tombstones]));
-  localStorage.setItem(SEEDS_KEY, "1");
   emitDataChanged();
 }

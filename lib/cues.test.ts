@@ -5,7 +5,6 @@ import {
   deleteCue,
   loadCues,
   rememberCue,
-  searchCues,
   updateCue,
 } from "./cues";
 
@@ -83,30 +82,6 @@ describe("cuesForPose", () => {
 
     const list = cuesForPose("Triangle");
     expect(list.map((c) => c.text)).toEqual(["Second cue.", "First cue."]);
-  });
-});
-
-describe("searchCues", () => {
-  beforeEach(() => {
-    rememberCue("Gate Pose", "Lengthen the side body.");
-    rememberCue("Warrior II", "Kickstand the back heel.");
-  });
-
-  it("matches on the cue's words", () => {
-    expect(searchCues("side body").map((c) => c.text)).toEqual([
-      "Lengthen the side body.",
-    ]);
-    expect(searchCues("kickstand").map((c) => c.text)).toEqual([
-      "Kickstand the back heel.",
-    ]);
-  });
-
-  it("matches on the pose name", () => {
-    expect(searchCues("gate").map((c) => c.pose)).toEqual(["Gate Pose"]);
-  });
-
-  it("returns everything for an empty query", () => {
-    expect(searchCues("  ")).toHaveLength(2);
   });
 });
 

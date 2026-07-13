@@ -107,15 +107,6 @@ export function allCues(): CueEntry[] {
   return loadCues().sort(byRecency);
 }
 
-/** Substring search across the cue's words and the pose it was written for. */
-export function searchCues(query: string): CueEntry[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return allCues();
-  return loadCues()
-    .filter((c) => c.text.toLowerCase().includes(q) || c.pose.toLowerCase().includes(q))
-    .sort(byRecency);
-}
-
 /** Add or replace a cue by id, preserving its fields — used by backup restore. */
 export function saveCue(entry: CueEntry): void {
   const all = loadCuesRaw();
