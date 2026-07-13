@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { exportBackup } from "@/lib/backup";
-import { ConfirmDialog } from "@/components/modal";
+import { getSyncToken } from "@/lib/sync";
+import { ConfirmDialog, Modal } from "@/components/modal";
 
 export function ExamplesNotice({ onRemove, onDismiss }: { onRemove: () => void; onDismiss: () => void }) {
   return (
@@ -72,43 +74,131 @@ export function RemoveExamplesModal({
   );
 }
 
+function BackupFirstLink() {
+  return (
+    <button
+      type="button"
+      onClick={() => exportBackup()}
+      className="underline underline-offset-2 transition hover:text-stone-600"
+    >
+      Export a backup first
+    </button>
+  );
+}
+
+/**
+ * "Start over" is two very different acts — removing the examples (harmless)
+ * and erasing the user's own work (the most destructive action in the app,
+ * with sync-wide reach). The dialog separates them: a chooser first, then a
+ * dedicated confirm step for erasing that spells out the blast radius.
+ */
 export function StartOverModal({
   ownClassCount,
   ownInspirationCount,
-  onConfirm,
+  hasExamples,
+  onRemoveExamples,
+  onErase,
   onCancel,
 }: {
   ownClassCount: number;
   ownInspirationCount: number;
-  onConfirm: () => void;
+  hasExamples: boolean;
+  onRemoveExamples: () => void;
+  onErase: () => void;
   onCancel: () => void;
 }) {
+  // With no examples to remove, the chooser has only one real option — go
+  // straight to the erase confirm.
+  const [step, setStep] = useState<"choose" | "erase">(hasExamples ? "choose" : "erase");
+  const syncEnabled = getSyncToken() !== null;
+
   const own: string[] = [];
   if (ownClassCount > 0) own.push(`${ownClassCount} class${ownClassCount === 1 ? "" : "es"}`);
   if (ownInspirationCount > 0) own.push(`${ownInspirationCount} inspiration${ownInspirationCount === 1 ? "" : "s"}`);
-  const body = own.length > 0
-    ? `This deletes your ${own.join(" and ")} and brings back the fresh examples. There is no undo.`
-    : "This resets everything back to just the fresh examples. There is no undo.";
-  return (
-    <ConfirmDialog
-      title="Start over?"
-      body={body}
-      confirmLabel="Start over"
-      tone="danger"
-      onConfirm={onConfirm}
-      onCancel={onCancel}
-    >
-      {own.length > 0 && (
-        <p className="mt-2 text-[13px] text-stone-400">
+  const ownSummary = own.length > 0 ? `your ${own.join(" and ")}` : null;
+
+  if (step === "choose") {
+    return (
+      <Modal onDismiss={onCancel}>
+        <p className="font-display text-base font-medium text-stone-800">Start over?</p>
+        <p className="mt-1 text-[13px] text-stone-400">
+          Two very different things — pick the one you mean.
+        </p>
+        <button
+          type="button"
+          onClick={onRemoveExamples}
+          className="mt-4 block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-left transition hover:bg-stone-100"
+        >
+          <span className="block text-sm font-medium text-stone-800">Remove the examples</span>
+          <span className="mt-0.5 block text-[13px] leading-relaxed text-stone-500">
+            {ownSummary
+              ? <>Keeps {ownSummary}. The examples won&rsquo;t come back.</>
+              : <>The examples won&rsquo;t come back.</>}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setStep("erase")}
+          className="mt-2.5 block w-full rounded-xl border border-stone-200 px-4 py-3 text-left transition hover:bg-stone-50"
+        >
+          <span className="block text-sm font-medium text-rose-700">Erase everything…</span>
+          <span className="mt-0.5 block text-[13px] leading-relaxed text-stone-400">
+            {ownSummary
+              ? <>Deletes {ownSummary}, then brings back the fresh examples.</>
+              : <>Clears this library and brings back the fresh examples.</>}
+          </span>
+        </button>
+        <div className="mt-4 flex items-center justify-between text-[13px] text-stone-400">
+          {ownSummary ? <BackupFirstLink /> : <span />}
           <button
             type="button"
-            onClick={() => exportBackup()}
-            className="underline underline-offset-2 transition hover:text-stone-600"
+            onClick={onCancel}
+            className="rounded-full px-3 py-1.5 font-medium text-stone-500 transition hover:bg-stone-100"
           >
-            Export a backup first
+            Cancel
           </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal onDismiss={onCancel}>
+      <p className="font-display text-base font-medium text-stone-800">Erase everything?</p>
+      <p className="mt-2 text-sm text-stone-500">
+        {ownSummary
+          ? <>This deletes {ownSummary} and brings back the fresh examples. There is no undo.</>
+          : <>This resets everything back to just the fresh examples. There is no undo.</>}
+      </p>
+      {syncEnabled && ownSummary && (
+        <div className="mt-3 rounded-lg border border-rose-200/70 bg-rose-50/60 px-3.5 py-2.5">
+          <p className="text-[13px] leading-relaxed text-rose-700">
+            Sync is on — this also erases them from your other devices. It happens quickly
+            and everywhere.
+          </p>
+        </div>
+      )}
+      {ownSummary && (
+        <p className="mt-3 text-[13px] text-stone-400">
+          <BackupFirstLink /> — takes a second, undoes anything.
         </p>
       )}
-    </ConfirmDialog>
+      <div className="mt-5 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={hasExamples ? () => setStep("choose") : onCancel}
+          className="rounded-full px-4 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100"
+        >
+          {ownSummary ? "Keep my work" : "Cancel"}
+        </button>
+        <button
+          type="button"
+          onClick={onErase}
+          className="rounded-full bg-rose-700 px-4 py-2 text-sm font-medium text-rose-50 transition hover:bg-rose-800"
+        >
+          Erase everything
+        </button>
+      </div>
+    </Modal>
   );
 }

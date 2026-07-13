@@ -455,7 +455,12 @@ export default function LibraryPage() {
         <StartOverModal
           ownClassCount={sequences.length - exampleClassCount}
           ownInspirationCount={inspirations.length - exampleInspirationCount}
-          onConfirm={handleStartOver}
+          hasExamples={exampleClassCount + exampleInspirationCount > 0}
+          onRemoveExamples={() => {
+            handleRemoveExamples();
+            setStartOverOpen(false);
+          }}
+          onErase={handleStartOver}
           onCancel={() => setStartOverOpen(false)}
         />
       )}

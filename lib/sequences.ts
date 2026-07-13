@@ -208,6 +208,24 @@ export function examplesCleared(): boolean {
   return localStorage.getItem(EXAMPLES_CLEARED_KEY) === "1";
 }
 
+// Mirrors TOKEN_KEY in lib/sync (imported here would be circular).
+const SYNC_TOKEN_KEY = "yoga-sync-token";
+
+/**
+ * A device that is connected — or connecting — to a sync link must never
+ * self-seed examples: the cloud copy is the library, and fresh local seeds
+ * would merge into it and spread to every device. The `#sync=` hash covers
+ * the joining window: the first render (and thus the first storage read)
+ * happens before SyncBoot has adopted the token from the URL.
+ */
+export function shouldSeedExamples(): boolean {
+  if (typeof window === "undefined") return false;
+  if (examplesCleared()) return false;
+  if (localStorage.getItem(SYNC_TOKEN_KEY)) return false;
+  const hash = window.location ? window.location.hash : "";
+  return !/[#&]sync=/.test(hash ?? "");
+}
+
 /** True once the user has dismissed the examples notice but kept the examples. */
 export function examplesNoticeDismissed(): boolean {
   if (typeof window === "undefined") return false;
@@ -629,7 +647,7 @@ export function loadSequencesRaw(): SequenceRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      if (examplesCleared()) return [];
+      if (!shouldSeedExamples()) return [];
       const seeded = buildSeedSequences().map(migrateRecord);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
       localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
@@ -640,9 +658,10 @@ export function loadSequencesRaw(): SequenceRecord[] {
     let records: SequenceRecord[] = parsed;
     if (storedVersion < SEEDS_VERSION) {
       // Remove old seeds, inject new ones at the front — unless the user
-      // already cleared the examples; that choice outlives seed refreshes.
+      // already cleared the examples (that choice outlives seed refreshes)
+      // or this device syncs (the cloud copy is the library).
       records = (parsed as SequenceRecord[]).filter((r) => !OLD_SEED_IDS.has(r.id));
-      if (!examplesCleared()) records = [...buildSeedSequences(), ...records];
+      if (shouldSeedExamples()) records = [...buildSeedSequences(), ...records];
       localStorage.setItem(SEEDS_VERSION_KEY, String(SEEDS_VERSION));
     }
     const migrated = withoutExpiredTombstones(records.map(migrateRecord));

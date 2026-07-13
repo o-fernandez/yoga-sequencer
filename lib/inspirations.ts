@@ -1,4 +1,4 @@
-import { daysFromToday, examplesCleared, timestampDaysAgo } from "./sequences";
+import { daysFromToday, shouldSeedExamples, timestampDaysAgo } from "./sequences";
 import { emitDataChanged } from "./data-changed";
 import { withoutExpiredTombstones } from "./sync-merge";
 
@@ -54,7 +54,7 @@ export function loadInspirationsRaw(): InspirationEntry[] {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) {
-      if (examplesCleared()) return [];
+      if (!shouldSeedExamples()) return [];
       const seeded = buildSeedInspirations();
       localStorage.setItem(KEY, JSON.stringify(seeded));
       return seeded;

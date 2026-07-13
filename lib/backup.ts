@@ -137,14 +137,27 @@ export function parseBackupFile(text: string): ImportPreview {
 }
 
 export function applyImport(preview: ImportPreview): void {
+  // A record that's alive in the file but tombstoned here is a deliberate
+  // restore. Stamp it with a fresh updatedAt (mirroring restoreSequence) so it
+  // wins the last-write-wins sync merge against the tombstone on every device;
+  // with the file's original timestamp it would lose and be re-deleted.
+  const now = new Date().toISOString();
+  const resurrect = <T extends { id: string; updatedAt: string; deletedAt?: string }>(
+    incoming: T,
+    tombstoned: Set<string>
+  ): T => (!incoming.deletedAt && tombstoned.has(incoming.id) ? { ...incoming, updatedAt: now } : incoming);
+
+  const deadSequences = new Set(loadSequencesRaw().filter((s) => s.deletedAt).map((s) => s.id));
   for (const record of preview.records) {
-    saveSequence(record);
+    saveSequence(resurrect(record, deadSequences));
   }
+  const deadInspirations = new Set(loadInspirationsRaw().filter((e) => e.deletedAt).map((e) => e.id));
   for (const entry of preview.inspirations) {
-    saveInspiration(entry);
+    saveInspiration(resurrect(entry, deadInspirations));
   }
+  const deadCues = new Set(loadCuesRaw().filter((c) => c.deletedAt).map((c) => c.id));
   for (const cue of preview.cues) {
-    saveCue(cue);
+    saveCue(resurrect(cue, deadCues));
   }
   applyExampleFlags(preview.flags);
 }
